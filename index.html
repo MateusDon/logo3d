@@ -76,7 +76,7 @@
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* BOTÃO DE GRAVAR PROFISSIONAL */
+        /* BOTÃO DE GRAVAR PROFISSIONAL VIA POINTER EVENTS */
         #record-btn {
             width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
             cursor: pointer; display: flex; align-items: center; justify-content: center; 
@@ -168,10 +168,9 @@
             
             <button id="record-btn" 
                     onclick="event.stopPropagation();"
-                    ontouchstart="event.stopPropagation(); startRecording();"
-                    ontouchend="event.stopPropagation(); stopRecording();"
-                    onmousedown="event.stopPropagation(); startRecording();"
-                    onmouseup="event.stopPropagation(); stopRecording();">
+                    onpointerdown="event.stopPropagation(); startRecording();"
+                    onpointerup="event.stopPropagation(); stopRecording();"
+                    onpointerleave="event.stopPropagation(); stopRecording();">
                 <div id="record-btn-inner" style="width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s;"></div>
             </button>
             
@@ -221,7 +220,7 @@
         window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
 
 
-        // --- CONTROLE DA CÂMERA ---
+        // --- CONTROLE DA CÂMERA COM SUPORTE A ÁUDIO ---
         let stream;
         let camMode = "environment"; 
         const video = document.getElementById('preview');
@@ -229,13 +228,24 @@
         async function initCamera() {
             if(stream) stream.getTracks().forEach(t => t.stop());
             try {
+                // Solicitando Câmera + Microfone juntos
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
-                    audio: false
+                    audio: true
                 });
                 video.srcObject = stream;
             } catch (err) {
-                alert("O aplicativo precisa da permissão da câmera.");
+                console.warn("Microfone recusado ou indisponível, tentando apenas vídeo...", err);
+                try {
+                    // Fallback de segurança se o microfone for bloqueado pelo usuário
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
+                        audio: false
+                    });
+                    video.srcObject = stream;
+                } catch(finalErr) {
+                    alert("O aplicativo precisa da permissão da câmera para funcionar.");
+                }
             }
         }
 
@@ -343,72 +353,75 @@
         }
 
 
-        // --- 🔥 MOTOR DE GRAVAÇÃO INVISÍVEL (CANVAS RECORDER) ---
+        // --- 🔥 MOTOR DE GRAVAÇÃO INVISÍVEL (CANVAS RECORDER) COM SUPORTE A SOM ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
         let recordingCanvas = document.createElement('canvas');
         let recordCtx = recordingCanvas.getContext('2d');
         let recordingStream;
+        let recordingStartTime = 0;
 
         function drawRecordingFrame() {
             if (!isRecording) return;
 
-            // 1. Desenha o fundo da câmera em tempo real no canvas
+            // 1. Desenha a imagem da câmera de fundo
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
-            // 2. Se a logo estiver visível, desenha ela por cima mantendo o mesmo tamanho/giro da tela
+            // 2. Se houver logo, desenha ela por cima na posição certa
             if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
                 const videoRect = video.getBoundingClientRect();
                 const logoRect = logoRender.getBoundingClientRect();
 
-                // Proporção de escala entre a tela do celular e a resolução real do vídeo
                 const scaleXFactor = recordingCanvas.width / videoRect.width;
                 const scaleYFactor = recordingCanvas.height / videoRect.height;
 
-                // Encontra a posição central exata da logo na tela
                 const logoCenterX = logoRect.left + logoRect.width / 2;
                 const logoCenterY = logoRect.top + logoRect.height / 2;
 
-                // Converte as coordenadas da tela para a resolução do Canvas
                 const canvasLogoX = (logoCenterX - videoRect.left) * scaleXFactor;
                 const canvasLogoY = (logoCenterY - videoRect.top) * scaleYFactor;
 
                 const canvasLogoW = logoRect.width * scaleXFactor;
                 const canvasLogoH = logoRect.height * scaleYFactor;
 
-                // Move o pincel do Canvas para a posição certa e desenha a logo
                 recordCtx.translate(canvasLogoX, canvasLogoY);
                 recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                 
                 recordCtx.restore();
             }
 
-            // Mantém o loop rodando enquanto estiver gravando
             requestAnimationFrame(drawRecordingFrame);
         }
 
         async function startRecording() {
             if (isRecording) return;
 
-            // Feedback visual de gravação no botão (fica quadrado)
+            recordingStartTime = Date.now();
+
+            // Feedback visual do botão gravando
             document.getElementById('record-btn-inner').style.borderRadius = '4px';
             document.getElementById('record-btn-inner').style.scale = '0.8';
             document.getElementById('record-btn').style.transform = 'scale(1.1)';
 
             recordedChunks = [];
             
-            // Configura o canvas com a resolução nativa máxima do vídeo da câmera
             recordingCanvas.width = video.videoWidth || 1080;
             recordingCanvas.height = video.videoHeight || 1920;
 
             isRecording = true;
-            drawRecordingFrame(); // Inicia o loop de renderização limpa
+            drawRecordingFrame();
 
-            // Captura o fluxo de vídeo do Canvas a estáveis 30 FPS
+            // 1. Puxa o fluxo visual do Canvas (Vídeo)
             recordingStream = recordingCanvas.captureStream(30);
+
+            // 2. 🔥 NOVIDADE: Captura a faixa de áudio ativa da câmera e injeta na gravação
+            if (stream && stream.getAudioTracks().length > 0) {
+                const micTrack = stream.getAudioTracks()[0];
+                recordingStream.addTrack(micTrack);
+            }
 
             let options = { mimeType: 'video/webm;codecs=vp9' };
             if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/webm;codecs=vp8' };
@@ -426,6 +439,8 @@
                 };
 
                 mediaRecorder.onstop = () => {
+                    if (recordedChunks.length === 0) return;
+
                     const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
                     const fileUrl = URL.createObjectURL(blob);
 
@@ -436,10 +451,8 @@
                     downloadLink.download = `logocam_pro_${Date.now()}.${ext}`;
                     document.body.appendChild(downloadLink);
 
-                    // Dispara o download nativo para a galeria
                     downloadLink.click();
 
-                    // 🔥 CORREÇÃO PARA ANDROID: Mantém o link vivo por 5 segundos na memória do aparelho
                     setTimeout(() => {
                         if (downloadLink.parentNode) {
                             document.body.removeChild(downloadLink);
@@ -448,7 +461,7 @@
                     }, 5000);
                 };
 
-                mediaRecorder.start(100); // Salva blocos a cada 100ms para evitar perdas
+                mediaRecorder.start(100);
             } catch (err) {
                 console.error("Erro ao iniciar gravação:", err);
                 resetRecordButton();
@@ -462,7 +475,21 @@
 
             resetRecordButton();
 
+            const duration = Date.now() - recordingStartTime;
+
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                // Trava antifalha: se for clique rápido de menos de 1 segundo cancela o arquivo corrompido
+                if (duration < 1000) {
+                    mediaRecorder.ondataavailable = null;
+                    mediaRecorder.onstop = null;
+                    try { mediaRecorder.stop(); } catch(e) {}
+                    if (recordingStream) {
+                        recordingStream.getTracks().forEach(track => track.stop());
+                    }
+                    alert("⚠️ Segure o botão para gravar! Um clique rápido não gera vídeo.");
+                    return;
+                }
+
                 mediaRecorder.stop();
             }
 
