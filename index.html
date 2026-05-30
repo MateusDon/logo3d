@@ -63,7 +63,7 @@
         .btn:active { transform: scale(0.85); background: rgba(255, 255, 255, 0.25); }
         .btn-clean { color: #f87171; }
 
-        /* CONTROLES INFERIORES */
+        /* CONTROLES DE VELOCIDADE E GRAVAÇÃO INFERIORES */
         .bottom-bar {
             position: absolute; bottom: 50px; width: 100%;
             display: flex; justify-content: space-between; align-items: center;
@@ -76,29 +76,11 @@
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* BOTÃO EXCLUSIVO DE GRAVAÇÃO DO ANDROID */
-        #record-container {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
+        /* BOTÃO DE GRAVAR PROFISSIONAL */
         #record-btn {
-            width: 75px; height: 75px; background: #ef4444; border: 5px solid white;
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: transform 0.2s, background-color 0.2s;
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
-            touch-action: none; user-select: none; -webkit-user-select: none;
-        }
-        #record-btn i { color: white; font-size: 24px; display: none; }
-        #record-btn:active { transform: scale(1.15); background: #dc2626; }
-        
-        /* Animação pulsante durante a gravação ativa */
-        .recording-active { animation: pulse 1.2s infinite; background: #b91c1c !important; }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
-            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+            width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
+            cursor: pointer; display: flex; align-items: center; justify-content: center; 
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: transform 0.2s; outline: none;
         }
 
         /* LOGOMARCA INTERATIVA E MÁSCARA DO REFLEXO */
@@ -184,25 +166,22 @@
         <div class="bottom-bar" id="ui-bottom">
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(-0.2);"><i class="fa-solid fa-minus"></i></button>
             
-            <div id="bottom-center-area" style="color: rgba(255,255,255,0.6); font-size: 11px; font-weight: 600; letter-spacing: 1px; pointer-events: none;">
-                <span id="label-speed">VELOCIDADE</span>
-                <div id="record-container">
-                    <div id="record-btn" title="Segure para Gravar">
-                        <i class="fa-solid fa-video"></i>
-                    </div>
-                    <span style="color: rgba(255,255,255,0.7); font-size: 9px; margin-top: 4px; letter-spacing: 0.5px; font-weight: bold;">SEGURE PARA GRAVAR</span>
-                </div>
-            </div>
+            <button id="record-btn" 
+                    onclick="event.stopPropagation();"
+                    ontouchstart="event.stopPropagation(); startRecording();"
+                    ontouchend="event.stopPropagation(); stopRecording();"
+                    onmousedown="event.stopPropagation(); startRecording();"
+                    onmouseup="event.stopPropagation(); stopRecording();">
+                <div id="record-btn-inner" style="width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s;"></div>
+            </button>
             
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(0.2);"><i class="fa-solid fa-plus"></i></button>
         </div>
     </div>
 
     <script>
-        // --- DETECÇÃO DO SISTEMA OPERACIONAL ---
-        const isAndroid = /Android/i.test(navigator.userAgent);
-
         // --- GERENCIAMENTO DE SENHAS E AUTO-LOGIN (1 MÊS) ---
+        
         function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -236,15 +215,6 @@
         function liberarAcesso() {
             document.getElementById('login-screen').style.display='none';
             document.getElementById('app-container').style.display='block';
-            
-            // Ativa o layout exclusivo de Android se for detectado
-            if (isAndroid) {
-                document.getElementById('label-speed').style.display = 'none';
-                document.getElementById('record-container').style.display = 'flex';
-                document.getElementById('bottom-center-area').style.pointerEvents = 'auto';
-                ativarRecursosGravacaoAndroid();
-            }
-            
             initCamera();
         }
 
@@ -373,155 +343,138 @@
         }
 
 
-        // --- ENGINE EXCLUSIVA DE GRAVAÇÃO PARA ANDROID ---
+        // --- 🔥 MOTOR DE GRAVAÇÃO INVISÍVEL (CANVAS RECORDER) ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
-        let canvasElement, canvasCtx, recordingLoopId;
+        let recordingCanvas = document.createElement('canvas');
+        let recordCtx = recordingCanvas.getContext('2d');
+        let recordingStream;
 
-        function activarRecursosGravacaoAndroid() {
-            const recordBtn = document.getElementById('record-btn');
-            
-            // Gerencia eventos de toque para o comportamento "Segurar para Gravar"
-            recordBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                startAndroidRecording();
-            });
-            
-            recordBtn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                stopAndroidRecording();
-            });
+        function drawRecordingFrame() {
+            if (!isRecording) return;
 
-            // Fallback para testes em computador usando cliques de mouse
-            recordBtn.addEventListener('mousedown', (e) => {
-                e.stopPropagation();
-                startAndroidRecording();
-            });
-            recordBtn.addEventListener('mouseup', (e) => {
-                e.stopPropagation();
-                stopAndroidRecording();
-            });
+            // 1. Desenha o fundo da câmera em tempo real no canvas
+            recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
+
+            // 2. Se a logo estiver visível, desenha ela por cima mantendo o mesmo tamanho/giro da tela
+            if (wrapper.style.display !== 'none' && logoRender.src) {
+                recordCtx.save();
+
+                const videoRect = video.getBoundingClientRect();
+                const logoRect = logoRender.getBoundingClientRect();
+
+                // Proporção de escala entre a tela do celular e a resolução real do vídeo
+                const scaleXFactor = recordingCanvas.width / videoRect.width;
+                const scaleYFactor = recordingCanvas.height / videoRect.height;
+
+                // Encontra a posição central exata da logo na tela
+                const logoCenterX = logoRect.left + logoRect.width / 2;
+                const logoCenterY = logoRect.top + logoRect.height / 2;
+
+                // Converte as coordenadas da tela para a resolução do Canvas
+                const canvasLogoX = (logoCenterX - videoRect.left) * scaleXFactor;
+                const canvasLogoY = (logoCenterY - videoRect.top) * scaleYFactor;
+
+                const canvasLogoW = logoRect.width * scaleXFactor;
+                const canvasLogoH = logoRect.height * scaleYFactor;
+
+                // Move o pincel do Canvas para a posição certa e desenha a logo
+                recordCtx.translate(canvasLogoX, canvasLogoY);
+                recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
+                
+                recordCtx.restore();
+            }
+
+            // Mantém o loop rodando enquanto estiver gravando
+            requestAnimationFrame(drawRecordingFrame);
         }
 
-        function startAndroidRecording() {
+        async function startRecording() {
             if (isRecording) return;
-            isRecording = true;
-            
-            const recordBtn = document.getElementById('record-btn');
-            recordBtn.classList.add('recording-active');
-            
+
+            // Feedback visual de gravação no botão (fica quadrado)
+            document.getElementById('record-btn-inner').style.borderRadius = '4px';
+            document.getElementById('record-btn-inner').style.scale = '0.8';
+            document.getElementById('record-btn').style.transform = 'scale(1.1)';
+
             recordedChunks = [];
             
-            // Instancia dinamicamente um elemento Canvas para mesclar a Câmera e a Logo em tempo real
-            canvasElement = document.createElement('canvas');
-            canvasElement.width = video.videoWidth || 1280;
-            canvasElement.height = video.videoHeight || 720;
-            canvasCtx = canvasElement.getContext('2d');
-            
-            // Inicia o ciclo de renderização paralela do Canvas
-            renderCanvasFrame();
-            
-            // Captura o fluxo de mídia do Canvas a 30 Frames estáveis por segundo
-            const canvasStream = canvasElement.captureStream(30);
-            
-            // Configura os codecs nativos ideais de alta performance do Android (WebM/VP9)
+            // Configura o canvas com a resolução nativa máxima do vídeo da câmera
+            recordingCanvas.width = video.videoWidth || 1080;
+            recordingCanvas.height = video.videoHeight || 1920;
+
+            isRecording = true;
+            drawRecordingFrame(); // Inicia o loop de renderização limpa
+
+            // Captura o fluxo de vídeo do Canvas a estáveis 30 FPS
+            recordingStream = recordingCanvas.captureStream(30);
+
             let options = { mimeType: 'video/webm;codecs=vp9' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options = { mimeType: 'video/webm' };
-            }
-            
+            if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/webm;codecs=vp8' };
+            if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/webm' };
+            if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/mp4' };
+            if (!MediaRecorder.isTypeSupported(options)) options = {};
+
             try {
-                mediaRecorder = new MediaRecorder(canvasStream, options);
-                
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data && event.data.size > 0) {
-                        recordedChunks.push(event.data);
+                mediaRecorder = new MediaRecorder(recordingStream, options);
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) {
+                        recordedChunks.push(e.data);
                     }
                 };
-                
+
                 mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
                     const fileUrl = URL.createObjectURL(blob);
-                    
-                    // Dispara o download automático do arquivo perfeitamente integrado à galeria de mídias do Android
+
                     const downloadLink = document.createElement('a');
                     downloadLink.href = fileUrl;
-                    downloadLink.download = `logocam_pro_${Date.now()}.webm`;
+
+                    const ext = (mediaRecorder.mimeType && mediaRecorder.mimeType.includes('mp4')) ? 'mp4' : 'webm';
+                    downloadLink.download = `logocam_pro_${Date.now()}.${ext}`;
                     document.body.appendChild(downloadLink);
+
+                    // Dispara o download nativo para a galeria
                     downloadLink.click();
-                    document.body.removeChild(downloadLink);
-                    URL.revokeObjectURL(fileUrl);
+
+                    // 🔥 CORREÇÃO PARA ANDROID: Mantém o link vivo por 5 segundos na memória do aparelho
+                    setTimeout(() => {
+                        if (downloadLink.parentNode) {
+                            document.body.removeChild(downloadLink);
+                        }
+                        URL.revokeObjectURL(fileUrl);
+                    }, 5000);
                 };
-                
-                mediaRecorder.start();
-            } catch (error) {
-                console.error("Falha ao inicializar o MediaRecorder do Android:", error);
+
+                mediaRecorder.start(100); // Salva blocos a cada 100ms para evitar perdas
+            } catch (err) {
+                console.error("Erro ao iniciar gravação:", err);
+                resetRecordButton();
                 isRecording = false;
-                recordBtn.classList.remove('recording-active');
-                cancelAnimationFrame(recordingLoopId);
             }
         }
 
-        function stopAndroidRecording() {
+        function stopRecording() {
             if (!isRecording) return;
             isRecording = false;
-            
-            const recordBtn = document.getElementById('record-btn');
-            recordBtn.classList.remove('recording-active');
-            
+
+            resetRecordButton();
+
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
-            cancelAnimationFrame(recordingLoopId);
+
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(track => track.stop());
+            }
         }
 
-        function renderCanvasFrame() {
-            if (!isRecording) return;
-            
-            const canvasWidth = canvasElement.width;
-            const canvasHeight = canvasElement.height;
-            
-            // 1. Desenha o fundo em tempo real capturado da câmera
-            canvasCtx.drawImage(video, 0, 0, canvasWidth, canvasHeight);
-            
-            // 2. Se houver uma logo carregada e visível na tela, renderiza ela por cima
-            if (wrapper.style.display === 'block' && logoRender.src) {
-                canvasCtx.save();
-                
-                // Mapeia o posicionamento exato da logo na tela baseado no preview responsivo do celular
-                const boundsVideo = video.getBoundingClientRect();
-                const boundsWrapper = wrapper.getBoundingClientRect();
-                
-                // Calcula as escalas de proporção entre o visor físico e a resolução real do vídeo
-                const scaleFactorX = canvasWidth / boundsVideo.width;
-                const scaleFactorY = canvasHeight / boundsVideo.height;
-                
-                // Localiza o ponto central absoluto onde o cliente posicionou a logo com os dedos
-                const centerLogoX = (boundsWrapper.left - boundsVideo.left + boundsWrapper.width / 2) * scaleFactorX;
-                const centerLogoY = (boundsWrapper.top - boundsVideo.top + boundsWrapper.height / 2) * scaleFactorY;
-                
-                // Ajusta o tamanho proporcional da logo no arquivo final gravado
-                const baseLogoWidth = 160 * scale; 
-                const targetLogoWidth = baseLogoWidth * scaleFactorX;
-                const targetLogoHeight = (logoRender.naturalHeight / logoRender.naturalWidth) * targetLogoWidth;
-                
-                // Move o contexto geométrico do canvas para o centro da logo
-                canvasCtx.translate(centerLogoX, centerLogoY);
-                
-                // Aplica a transformação horizontal scaleX da animação 3D giratória idêntica à tela
-                let liveScaleX = Math.abs(Math.sin(counter));
-                canvasCtx.scale(liveScaleX, 1);
-                
-                // Desenha a imagem centralizada perfeitamente
-                canvasCtx.drawImage(logoRender, -targetLogoWidth / 2, -targetLogoHeight / 2, targetLogoWidth, targetLogoHeight);
-                
-                canvasCtx.restore();
-            }
-            
-            recordingLoopId = requestAnimationFrame(renderCanvasFrame);
+        function resetRecordButton() {
+            document.getElementById('record-btn-inner').style.borderRadius = '50%';
+            document.getElementById('record-btn-inner').style.scale = '1';
+            document.getElementById('record-btn').style.transform = 'scale(1)';
         }
     </script>
 </body>
