@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>LogoCam Pro</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script src="senhas.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        
+        /* TELA DE LOGIN PRIVADA */
+        #login-screen {
+            position: fixed; inset: 0; background: #0f172a; z-index: 10000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;
+        }
+        .login-box { background: #1e293b; padding: 40px; border-radius: 24px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); width: 90%; max-width: 400px; }
+        #login-screen input { padding: 15px; width: 100%; border: none; border-radius: 12px; margin-top: 20px; background: #334155; color: white; text-align: center; font-size: 18px; outline: none; }
+        
+        /* BOTÃO DE ENTRAR ROXO */
+        #login-screen button { 
+            padding: 15px 40px; margin-top: 20px; border: none; border-radius: 12px; 
+            background: #6d28d9; 
+            color: white; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; 
+            transition: background 0.3s;
+        }
+        #login-screen button:active { background: #5b21b6; }
+
+        /* INTERFACE DO APLICATIVO */
+        #app-container { display: none; width: 100%; height: 100%; position: relative; }
+        video#preview { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; z-index: 1; }
+
+        /* BARRA SUPERIOR MODERNA COM ÍCONES AMPLIADOS */
+        .top-bar { 
+            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 16px; z-index: 10; padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px); border-radius: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn { 
+            background: transparent; border: none; 
+            width: 54px; height: 54px; border-radius: 50%; 
+            color: white; font-size: 22px; cursor: pointer; 
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .btn:active { transform: scale(0.85); background: rgba(255, 255, 255, 0.25); }
+        .btn-clean { color: #f87171; }
+
+        /* CONTROLES INFERIORES */
+        .bottom-bar {
+            position: absolute; bottom: 50px; width: 100%;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 40px; z-index: 10; transition: opacity 0.3s ease;
+        }
+        .speed-btn {
+            width: 52px; height: 52px; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 50%; color: white; font-size: 22px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+        }
+
+        /* BOTÃO EXCLUSIVO DE GRAVAÇÃO DO ANDROID */
+        #record-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #record-btn {
+            width: 75px; height: 75px; background: #ef4444; border: 5px solid white;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: transform 0.2s, background-color 0.2s;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+            touch-action: none; user-select: none; -webkit-user-select: none;
+        }
+        #record-btn i { color: white; font-size: 24px; display: none; }
+        #record-btn:active { transform: scale(1.15); background: #dc2626; }
+        
+        /* Animação pulsante durante a gravação ativa */
+        .recording-active { animation: pulse 1.2s infinite; background: #b91c1c !important; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* LOGOMARCA INTERATIVA E MÁSCARA DO REFLEXO */
+        #logo-wrapper {
+            position: absolute; top: 35%; left: 25%; z-index: 5;
+            touch-action: none; display: none;
+        }
+        
+        #logo-container-inner {
+            position: relative;
+            width: 160px;
+            will-change: transform;
+        }
+        
+        #logo-img {
+            width: 100%;
+            display: block;
+        }
+
+        /* CAMADA DO REFLEXO LUMINOSO DENTRO DA LOGO */
+        #logo-shine {
+            position: absolute;
+            inset: 0;
+            mix-blend-mode: source-atop; 
+            background: linear-gradient(
+                90deg, 
+                rgba(255, 255, 255, 0) 0%, 
+                rgba(255, 255, 255, 0.03) 25%, 
+                rgba(255, 255, 255, 0.45) 50%, 
+                rgba(255, 255, 255, 0.03) 75%, 
+                rgba(255, 255, 255, 0) 100%
+            );
+            background-size: 200% 100%;
+            background-position: 150% 0;
+            pointer-events: none;
+        }
+
+        .hidden-ui { opacity: 0 !important; pointer-events: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="login-box">
+            <img src="logo.png" alt="Logo Premium" style="width: 100%; max-width: 100%; margin: 0 auto 20px auto; display: block; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">
+            <p style="opacity:0.6; font-size: 13px; margin-top: 5px;">Acesso Exclusivo</p>
+            <input type="password" id="pass" placeholder="Digite sua senha de acesso">
+            <button onclick="login()">ENTRAR NO APP</button>
+            <p id="err" style="color: #f87171; margin-top: 15px; font-size: 14px; display: none;">Senha incorreta!</p>
+        </div>
+        
+        <a href="https://instagram.com/dogz_criativa" target="_blank" style="margin-top: 25px; color: rgba(255,255,255,0.8); text-decoration: none; font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-brands fa-instagram" style="font-size: 22px; color: #c026d3;"></i> @dogz_criativa
+        </a>
+    </div>
+
+    <div id="app-container" onclick="showControls()">
+        <video id="preview" autoplay playsinline muted></video>
+
+        <div class="top-bar" id="ui-top">
+            <button class="btn" title="Inverter Câmera" onclick="event.stopPropagation(); switchCam();">
+                <i class="fa-solid fa-camera-rotate"></i>
+            </button>
+            <button class="btn" title="Escolher Logo" onclick="event.stopPropagation(); document.getElementById('upload').click();">
+                <i class="fa-solid fa-image"></i>
+            </button>
+            <button class="btn" id="pause-btn" title="Pausar/Girar" onclick="event.stopPropagation(); togglePause();">
+                <i class="fa-solid fa-pause" id="pause-icon"></i>
+            </button>
+            <button class="btn btn-clean" title="Modo Limpo" onclick="event.stopPropagation(); hideControls();">
+                <i class="fa-solid fa-eye-slash"></i>
+            </button>
+            <input type="file" id="upload" accept="image/png" style="display:none" onchange="loadLogo(event)">
+        </div>
+
+        <div id="logo-wrapper">
+            <div id="logo-container-inner">
+                <img id="logo-img" src="" alt="Logo do Cliente">
+                <div id="logo-shine"></div>
+            </div>
+        </div>
+
+        <div class="bottom-bar" id="ui-bottom">
+            <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(-0.2);"><i class="fa-solid fa-minus"></i></button>
+            
+            <div id="bottom-center-area" style="color: rgba(255,255,255,0.6); font-size: 11px; font-weight: 600; letter-spacing: 1px; pointer-events: none;">
+                <span id="label-speed">VELOCIDADE</span>
+                <div id="record-container">
+                    <div id="record-btn" title="Segure para Gravar">
+                        <i class="fa-solid fa-video"></i>
+                    </div>
+                    <span style="color: rgba(255,255,255,0.7); font-size: 9px; margin-top: 4px; letter-spacing: 0.5px; font-weight: bold;">SEGURE PARA GRAVAR</span>
+                </div>
+            </div>
+            
+            <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(0.2);"><i class="fa-solid fa-plus"></i></button>
+        </div>
+    </div>
+
+    <script>
+        // --- DETECÇÃO DO SISTEMA OPERACIONAL ---
+        const isAndroid = /Android/i.test(navigator.userAgent);
+
+        // --- GERENCIAMENTO DE SENHAS E AUTO-LOGIN (1 MÊS) ---
+        function verificarLoginSalvo() {
+            const senhaSalva = localStorage.getItem('app_senha');
+            const dataLogin = localStorage.getItem('app_data_login');
+
+            if (senhaSalva && dataLogin) {
+                const umMesEmMilissegundos = 30 * 24 * 60 * 60 * 1000;
+                const expirou = (Date.now() - parseInt(dataLogin)) > umMesEmMilissegundos;
+                const senhaAindaEValida = typeof vips !== 'undefined' && vips.includes(senhaSalva);
+
+                if (!expirou && senhaAindaEValida) {
+                    liberarAcesso();
+                } else {
+                    localStorage.removeItem('app_senha');
+                    localStorage.removeItem('app_data_login');
+                }
+            }
+        }
+
+        function login() {
+            const passwordInput = document.getElementById('pass').value;
+            
+            if(typeof vips !== 'undefined' && vips.includes(passwordInput)) {
+                localStorage.setItem('app_senha', passwordInput);
+                localStorage.setItem('app_data_login', Date.now());
+                liberarAcesso();
+            } else { 
+                document.getElementById('err').style.display='block'; 
+            }
+        }
+
+        function liberarAcesso() {
+            document.getElementById('login-screen').style.display='none';
+            document.getElementById('app-container').style.display='block';
+            
+            // Ativa o layout exclusivo de Android se for detectado
+            if (isAndroid) {
+                document.getElementById('label-speed').style.display = 'none';
+                document.getElementById('record-container').style.display = 'flex';
+                document.getElementById('bottom-center-area').style.pointerEvents = 'auto';
+                ativarRecursosGravacaoAndroid();
+            }
+            
+            initCamera();
+        }
+
+        window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
+
+
+        // --- CONTROLE DA CÂMERA ---
+        let stream;
+        let camMode = "environment"; 
+        const video = document.getElementById('preview');
+
+        async function initCamera() {
+            if(stream) stream.getTracks().forEach(t => t.stop());
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
+                    audio: false
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("O aplicativo precisa da permissão da câmera.");
+            }
+        }
+
+        function switchCam() { 
+            camMode = camMode === "user" ? "environment" : "user"; 
+            initCamera(); 
+        }
+
+        // --- ANIMAÇÃO DE GIRO COM CONTROLE DE REFLEXO DINÂMICO ---
+        const wrapper = document.getElementById('logo-wrapper');
+        const containerInner = document.getElementById('logo-container-inner');
+        const logoRender = document.getElementById('logo-img');
+        const shine = document.getElementById('logo-shine');
+        
+        let counter = 0;
+        let speed = 0.04; 
+        let isPaused = false;
+
+        function animateLogo() {
+            if (!isPaused) {
+                counter += speed;
+                
+                let scaleX = Math.abs(Math.sin(counter));
+                containerInner.style.transform = `scaleX(${scaleX})`;
+                
+                let shinePos = (Math.sin(counter) * 150) + 50;
+                shine.style.backgroundPosition = `${shinePos}% 0`;
+            }
+            requestAnimationFrame(animateLogo);
+        }
+        animateLogo();
+
+        function loadLogo(e) {
+            const file = e.target.files[0];
+            const objectUrl = URL.createObjectURL(file);
+            
+            logoRender.src = objectUrl;
+            
+            shine.style.webkitMaskImage = `url(${objectUrl})`;
+            shine.style.webkitMaskSize = 'contain';
+            shine.style.webkitMaskRepeat = 'no-repeat';
+            shine.style.webkitMaskPosition = 'center';
+            
+            shine.style.maskImage = `url(${objectUrl})`;
+            shine.style.maskSize = 'contain';
+            shine.style.maskRepeat = 'no-repeat';
+            shine.style.maskPosition = 'center';
+            
+            wrapper.style.display = 'block';
+        }
+        
+        function togglePause() { 
+            isPaused = !isPaused;
+            const icon = document.getElementById('pause-icon');
+            if(isPaused) {
+                icon.className = "fa-solid fa-play";
+            } else {
+                icon.className = "fa-solid fa-pause";
+            }
+        }
+
+        function changeSpeed(amount) {
+            speed += (amount * 0.05);
+            speed = Math.max(0.01, Math.min(speed, 0.15)); 
+        }
+
+        // --- GESTOS TOUCH ---
+        let posX=0, posY=0, lastX=0, lastY=0, scale=1, lastScale=1, startDist=0;
+
+        wrapper.addEventListener('touchstart', e => {
+            if(e.touches.length===1) { 
+                lastX=e.touches[0].clientX-posX; 
+                lastY=e.touches[0].clientY-posY; 
+            }
+            if(e.touches.length===2) { 
+                startDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); 
+                lastScale = scale; 
+            }
+        });
+
+        wrapper.addEventListener('touchmove', e => {
+            if(e.touches.length===1) { 
+                posX=e.touches[0].clientX-lastX; 
+                posY=e.touches[0].clientY-lastY; 
+            }
+            if(e.touches.length===2) {
+                let d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+                scale = Math.max(0.3, Math.min(lastScale * (d/startDist), 3)); 
+            }
+            wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        });
+
+        // --- CONTROLE DA TELA LIMPA ---
+        const uiTop = document.getElementById('ui-top');
+        const uiBottom = document.getElementById('ui-bottom');
+
+        function hideControls() {
+            uiTop.classList.add('hidden-ui');
+            uiBottom.classList.add('hidden-ui');
+        }
+
+        function showControls() {
+            uiTop.classList.remove('hidden-ui');
+            uiBottom.classList.remove('hidden-ui');
+        }
+
+
+        // --- ENGINE EXCLUSIVA DE GRAVAÇÃO PARA ANDROID ---
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
+        let canvasElement, canvasCtx, recordingLoopId;
+
+        function activarRecursosGravacaoAndroid() {
+            const recordBtn = document.getElementById('record-btn');
+            
+            // Gerencia eventos de toque para o comportamento "Segurar para Gravar"
+            recordBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startAndroidRecording();
+            });
+            
+            recordBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                stopAndroidRecording();
+            });
+
+            // Fallback para testes em computador usando cliques de mouse
+            recordBtn.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                startAndroidRecording();
+            });
+            recordBtn.addEventListener('mouseup', (e) => {
+                e.stopPropagation();
+                stopAndroidRecording();
+            });
+        }
+
+        function startAndroidRecording() {
+            if (isRecording) return;
+            isRecording = true;
+            
+            const recordBtn = document.getElementById('record-btn');
+            recordBtn.classList.add('recording-active');
+            
+            recordedChunks = [];
+            
+            // Instancia dinamicamente um elemento Canvas para mesclar a Câmera e a Logo em tempo real
+            canvasElement = document.createElement('canvas');
+            canvasElement.width = video.videoWidth || 1280;
+            canvasElement.height = video.videoHeight || 720;
+            canvasCtx = canvasElement.getContext('2d');
+            
+            // Inicia o ciclo de renderização paralela do Canvas
+            renderCanvasFrame();
+            
+            // Captura o fluxo de mídia do Canvas a 30 Frames estáveis por segundo
+            const canvasStream = canvasElement.captureStream(30);
+            
+            // Configura os codecs nativos ideais de alta performance do Android (WebM/VP9)
+            let options = { mimeType: 'video/webm;codecs=vp9' };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options = { mimeType: 'video/webm' };
+            }
+            
+            try {
+                mediaRecorder = new MediaRecorder(canvasStream, options);
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const fileUrl = URL.createObjectURL(blob);
+                    
+                    // Dispara o download automático do arquivo perfeitamente integrado à galeria de mídias do Android
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = fileUrl;
+                    downloadLink.download = `logocam_pro_${Date.now()}.webm`;
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    URL.revokeObjectURL(fileUrl);
+                };
+                
+                mediaRecorder.start();
+            } catch (error) {
+                console.error("Falha ao inicializar o MediaRecorder do Android:", error);
+                isRecording = false;
+                recordBtn.classList.remove('recording-active');
+                cancelAnimationFrame(recordingLoopId);
+            }
+        }
+
+        function stopAndroidRecording() {
+            if (!isRecording) return;
+            isRecording = false;
+            
+            const recordBtn = document.getElementById('record-btn');
+            recordBtn.classList.remove('recording-active');
+            
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            cancelAnimationFrame(recordingLoopId);
+        }
+
+        function renderCanvasFrame() {
+            if (!isRecording) return;
+            
+            const canvasWidth = canvasElement.width;
+            const canvasHeight = canvasElement.height;
+            
+            // 1. Desenha o fundo em tempo real capturado da câmera
+            canvasCtx.drawImage(video, 0, 0, canvasWidth, canvasHeight);
+            
+            // 2. Se houver uma logo carregada e visível na tela, renderiza ela por cima
+            if (wrapper.style.display === 'block' && logoRender.src) {
+                canvasCtx.save();
+                
+                // Mapeia o posicionamento exato da logo na tela baseado no preview responsivo do celular
+                const boundsVideo = video.getBoundingClientRect();
+                const boundsWrapper = wrapper.getBoundingClientRect();
+                
+                // Calcula as escalas de proporção entre o visor físico e a resolução real do vídeo
+                const scaleFactorX = canvasWidth / boundsVideo.width;
+                const scaleFactorY = canvasHeight / boundsVideo.height;
+                
+                // Localiza o ponto central absoluto onde o cliente posicionou a logo com os dedos
+                const centerLogoX = (boundsWrapper.left - boundsVideo.left + boundsWrapper.width / 2) * scaleFactorX;
+                const centerLogoY = (boundsWrapper.top - boundsVideo.top + boundsWrapper.height / 2) * scaleFactorY;
+                
+                // Ajusta o tamanho proporcional da logo no arquivo final gravado
+                const baseLogoWidth = 160 * scale; 
+                const targetLogoWidth = baseLogoWidth * scaleFactorX;
+                const targetLogoHeight = (logoRender.naturalHeight / logoRender.naturalWidth) * targetLogoWidth;
+                
+                // Move o contexto geométrico do canvas para o centro da logo
+                canvasCtx.translate(centerLogoX, centerLogoY);
+                
+                // Aplica a transformação horizontal scaleX da animação 3D giratória idêntica à tela
+                let liveScaleX = Math.abs(Math.sin(counter));
+                canvasCtx.scale(liveScaleX, 1);
+                
+                // Desenha a imagem centralizada perfeitamente
+                canvasCtx.drawImage(logoRender, -targetLogoWidth / 2, -targetLogoHeight / 2, targetLogoWidth, targetLogoHeight);
+                
+                canvasCtx.restore();
+            }
+            
+            recordingLoopId = requestAnimationFrame(renderCanvasFrame);
+        }
+    </script>
+</body>
+</html>
