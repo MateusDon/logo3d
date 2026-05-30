@@ -180,7 +180,6 @@
 
     <script>
         // --- GERENCIAMENTO DE SENHAS E AUTO-LOGIN (1 MÊS) ---
-        
         function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -220,7 +219,7 @@
         window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
 
 
-        // --- CONTROLE DA CÂMERA COM SUPORTE A ÁUDIO ---
+        // --- CONTROLE DA CÂMERA E AUDIO ---
         let stream;
         let camMode = "environment"; 
         const video = document.getElementById('preview');
@@ -228,23 +227,21 @@
         async function initCamera() {
             if(stream) stream.getTracks().forEach(t => t.stop());
             try {
-                // Solicitando Câmera + Microfone juntos
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
                     audio: true
                 });
                 video.srcObject = stream;
             } catch (err) {
-                console.warn("Microfone recusado ou indisponível, tentando apenas vídeo...", err);
+                console.warn("Microfone indisponível, iniciando sem áudio...", err);
                 try {
-                    // Fallback de segurança se o microfone for bloqueado pelo usuário
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
                         audio: false
                     });
                     video.srcObject = stream;
                 } catch(finalErr) {
-                    alert("O aplicativo precisa da permissão da câmera para funcionar.");
+                    alert("A permissão da câmera é necessária.");
                 }
             }
         }
@@ -254,7 +251,7 @@
             initCamera(); 
         }
 
-        // --- ANIMAÇÃO DE GIRO COM CONTROLE DE REFLEXO DINÂMICO ---
+        // --- ANIMAÇÃO DE GIRO E REFLEXO ---
         const wrapper = document.getElementById('logo-wrapper');
         const containerInner = document.getElementById('logo-container-inner');
         const logoRender = document.getElementById('logo-img');
@@ -267,10 +264,8 @@
         function animateLogo() {
             if (!isPaused) {
                 counter += speed;
-                
                 let scaleX = Math.abs(Math.sin(counter));
                 containerInner.style.transform = `scaleX(${scaleX})`;
-                
                 let shinePos = (Math.sin(counter) * 150) + 50;
                 shine.style.backgroundPosition = `${shinePos}% 0`;
             }
@@ -300,11 +295,7 @@
         function togglePause() { 
             isPaused = !isPaused;
             const icon = document.getElementById('pause-icon');
-            if(isPaused) {
-                icon.className = "fa-solid fa-play";
-            } else {
-                icon.className = "fa-solid fa-pause";
-            }
+            icon.className = isPaused ? "fa-solid fa-play" : "fa-solid fa-pause";
         }
 
         function changeSpeed(amount) {
@@ -338,22 +329,14 @@
             wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
         });
 
-        // --- CONTROLE DA TELA LIMPA ---
         const uiTop = document.getElementById('ui-top');
         const uiBottom = document.getElementById('ui-bottom');
 
-        function hideControls() {
-            uiTop.classList.add('hidden-ui');
-            uiBottom.classList.add('hidden-ui');
-        }
-
-        function showControls() {
-            uiTop.classList.remove('hidden-ui');
-            uiBottom.classList.remove('hidden-ui');
-        }
+        function hideControls() { uiTop.classList.add('hidden-ui'); uiBottom.classList.add('hidden-ui'); }
+        function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- 🔥 MOTOR DE GRAVAÇÃO INVISÍVEL (CANVAS RECORDER) COM SUPORTE A SOM ---
+        // --- 🔥 MOTOR DE GRAVAÇÃO INVISÍVEL COM RESOLUÇÃO ADAPTATIVA PROFISSIONAL ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
@@ -365,16 +348,16 @@
         function drawRecordingFrame() {
             if (!isRecording) return;
 
-            // 1. Desenha a imagem da câmera de fundo
+            // Desenha o vídeo de fundo no Canvas (redimensiona automaticamente para a resolução escolhida)
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
-            // 2. Se houver logo, desenha ela por cima na posição certa
             if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
                 const videoRect = video.getBoundingClientRect();
                 const logoRect = logoRender.getBoundingClientRect();
 
+                // Fatores de escala dinâmicos baseados na resolução atual do Canvas
                 const scaleXFactor = recordingCanvas.width / videoRect.width;
                 const scaleYFactor = recordingCanvas.height / videoRect.height;
 
@@ -401,28 +384,35 @@
 
             recordingStartTime = Date.now();
 
-            // Feedback visual do botão gravando
             document.getElementById('record-btn-inner').style.borderRadius = '4px';
             document.getElementById('record-btn-inner').style.scale = '0.8';
             document.getElementById('record-btn').style.transform = 'scale(1.1)';
 
             recordedChunks = [];
             
-            recordingCanvas.width = video.videoWidth || 1080;
-            recordingCanvas.height = video.videoHeight || 1920;
+            // 🔥 OTIMIZAÇÃO HISTÓRICA: Se for Android, usa 720p estável. Se for iPhone, usa resolução máxima.
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            if (isAndroid) {
+                recordingCanvas.width = 720;
+                recordingCanvas.height = 1280;
+            } else {
+                recordingCanvas.width = video.videoWidth || 1080;
+                recordingCanvas.height = video.videoHeight || 1920;
+            }
 
             isRecording = true;
             drawRecordingFrame();
 
-            // 1. Puxa o fluxo visual do Canvas (Vídeo)
+            // Captura o fluxo visual limpo do Canvas
             recordingStream = recordingCanvas.captureStream(30);
 
-            // 2. 🔥 NOVIDADE: Captura a faixa de áudio ativa da câmera e injeta na gravação
+            // Injeta a faixa de áudio ativa do microfone direto no fluxo de gravação
             if (stream && stream.getAudioTracks().length > 0) {
                 const micTrack = stream.getAudioTracks()[0];
                 recordingStream.addTrack(micTrack);
             }
 
+            // Seleção inteligente do codec suportado por cada aparelho
             let options = { mimeType: 'video/webm;codecs=vp9' };
             if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/webm;codecs=vp8' };
             if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/webm' };
@@ -478,7 +468,6 @@
             const duration = Date.now() - recordingStartTime;
 
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                // Trava antifalha: se for clique rápido de menos de 1 segundo cancela o arquivo corrompido
                 if (duration < 1000) {
                     mediaRecorder.ondataavailable = null;
                     mediaRecorder.onstop = null;
@@ -489,7 +478,6 @@
                     alert("⚠️ Segure o botão para gravar! Um clique rápido não gera vídeo.");
                     return;
                 }
-
                 mediaRecorder.stop();
             }
 
