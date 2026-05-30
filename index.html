@@ -76,12 +76,11 @@
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* 🔥 BOTÃO DE GRAVAR PROFISSIONAL COM TRAVA ANTI-GESTOS PARA ANDROID */
+        /* BOTÃO DE GRAVAR MODERNO COM CLIQUE ÚNICO (START/STOP) */
         #record-btn {
             width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
             cursor: pointer; display: flex; align-items: center; justify-content: center; 
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: transform 0.2s; outline: none;
-            touch-action: none; user-select: none; -webkit-user-select: none;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: all 0.3s ease; outline: none;
         }
 
         /* LOGOMARCA INTERATIVA E MÁSCARA DO REFLEXO */
@@ -167,11 +166,7 @@
         <div class="bottom-bar" id="ui-bottom">
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(-0.2);"><i class="fa-solid fa-minus"></i></button>
             
-            <button id="record-btn" 
-                    onclick="event.stopPropagation();"
-                    ontouchstart="event.stopPropagation(); event.preventDefault(); startRecording();"
-                    ontouchend="event.stopPropagation(); event.preventDefault(); stopRecording();"
-                    ontouchcancel="event.stopPropagation(); event.preventDefault(); stopRecording();">
+            <button id="record-btn" onclick="event.stopPropagation(); toggleRecording();">
                 <div id="record-btn-inner" style="width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s;"></div>
             </button>
             
@@ -334,22 +329,19 @@
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- 🔥 MOTOR DE GRAVAÇÃO COM CORREÇÃO DEFINITIVA PARA ANDROID (ÁUDIO + GIRO) ---
+        // --- 🔥 MOTOR DE GRAVAÇÃO OTIMIZADO ULTRA-LIGHT COM SELETOR DE CLIQUE ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
         let recordingCanvas = document.createElement('canvas');
         let recordCtx = recordingCanvas.getContext('2d');
         let recordingStream;
-        let recordingStartTime = 0;
 
         function drawRecordingFrame() {
             if (!isRecording) return;
 
-            // 1. Desenha a imagem de fundo da câmera
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
-            // 2. Se houver logo ativa, insere na posição exata
             if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
@@ -370,7 +362,6 @@
 
                 recordCtx.translate(canvasLogoX, canvasLogoY);
                 
-                // 🔥 MELHORIA HISTÓRICA: Aplica o efeito tridimensional de giro horizontal diretamente no vídeo gravado!
                 let scaleX = Math.abs(Math.sin(counter));
                 recordCtx.scale(scaleX, 1);
                 
@@ -381,19 +372,29 @@
             requestAnimationFrame(drawRecordingFrame);
         }
 
+        function toggleRecording() {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+
         async function startRecording() {
             if (isRecording) return;
-            recordingStartTime = Date.now();
+            isRecording = true;
 
-            document.getElementById('record-btn-inner').style.borderRadius = '4px';
-            document.getElementById('record-btn-inner').style.scale = '0.8';
-            document.getElementById('record-btn').style.transform = 'scale(1.1)';
+            // Transforma o botão interno em quadrado (visual de gravação ativa)
+            const btnInner = document.getElementById('record-btn-inner');
+            btnInner.style.borderRadius = '4px';
+            btnInner.style.scale = '0.8';
+            document.getElementById('record-btn').style.background = '#dc2626';
 
             recordedChunks = [];
             
-            // 🔥 AJUSTE CRUCIAL DE RESOLUÇÃO: qHD no Android (Extremamente fluido) e Full HD no iPhone
             const isAndroid = /Android/i.test(navigator.userAgent);
             if (isAndroid) {
+                // Calibração super leve para rodar liso em qualquer Android
                 recordingCanvas.width = 540;   
                 recordingCanvas.height = 960;
             } else {
@@ -401,13 +402,9 @@
                 recordingCanvas.height = video.videoHeight || 1920;
             }
 
-            isRecording = true;
             drawRecordingFrame();
+            recordingStream = recordingCanvas.captureStream(isAndroid ? 20 : 30);
 
-            // Puxa o fluxo de vídeo puro do Canvas
-            recordingStream = recordingCanvas.captureStream(isAndroid ? 24 : 30);
-
-            // 🔥 CORREÇÃO DO TRAVAMENTO DO ANDROID: Junta os canais criando um MediaStream limpo do zero
             let combinedStream;
             if (stream && stream.getAudioTracks().length > 0) {
                 combinedStream = new MediaStream([
@@ -418,13 +415,12 @@
                 combinedStream = recordingStream;
             }
 
-            // Seleção de Codecs nativos e estáveis por sistema operacional
             let options = {};
             if (isAndroid) {
                 if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 2500000 };
+                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 1500000 };
                 } else if (MediaRecorder.isTypeSupported('video/webm')) {
-                    options = { mimeType: 'video/webm', videoBitsPerSecond: 2500000 };
+                    options = { mimeType: 'video/webm', videoBitsPerSecond: 1500000 };
                 }
             } else {
                 if (MediaRecorder.isTypeSupported('video/mp4')) {
@@ -454,7 +450,6 @@
                     downloadLink.download = `logocam_pro_${Date.now()}.${ext}`;
                     document.body.appendChild(downloadLink);
 
-                    // Força a chamada nativa do gerenciador de downloads do Android/Chrome
                     downloadLink.click();
 
                     setTimeout(() => {
@@ -462,10 +457,17 @@
                             document.body.removeChild(downloadLink);
                         }
                         URL.revokeObjectURL(fileUrl);
-                    }, 5000);
+                    }, 4000);
+
+                    // 🔥 LIMPEZA PROFUNDA ANTI-BUG: Destrói fluxos antigos para liberar a RAM do Android
+                    if (recordingStream) {
+                        recordingStream.getTracks().forEach(track => track.stop());
+                    }
                 };
 
-                mediaRecorder.start(100);
+                // 🔥 CORREÇÃO DO CONGESTIONAMENTO: Inicia sem passar tempo fracionado (sem o "100")
+                // Isso faz o Android empacotar tudo de uma vez só no final, sem travar no meio!
+                mediaRecorder.start();
             } catch (err) {
                 console.error("Erro ao iniciar gravação:", err);
                 resetRecordButton();
@@ -478,24 +480,17 @@
             isRecording = false;
 
             resetRecordButton();
-            const duration = Date.now() - recordingStartTime;
 
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                if (duration < 1000) {
-                    mediaRecorder.ondataavailable = null;
-                    mediaRecorder.onstop = null;
-                    try { mediaRecorder.stop(); } catch(e) {}
-                    alert("⚠️ Segure o botão para gravar! Um clique rápido não gera vídeo.");
-                    return;
-                }
                 mediaRecorder.stop();
             }
         }
 
         function resetRecordButton() {
-            document.getElementById('record-btn-inner').style.borderRadius = '50%';
-            document.getElementById('record-btn-inner').style.scale = '1';
-            document.getElementById('record-btn').style.transform = 'scale(1)';
+            const btnInner = document.getElementById('record-btn-inner');
+            btnInner.style.borderRadius = '50%';
+            btnInner.style.scale = '1';
+            document.getElementById('record-btn').style.background = '#ef4444';
         }
     </script>
 </body>
