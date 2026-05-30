@@ -76,11 +76,12 @@
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* BOTÃO DE GRAVAR PROFISSIONAL VIA POINTER EVENTS */
+        /* 🔥 BOTÃO DE GRAVAR PROFISSIONAL COM TRAVA ANTI-GESTOS PARA ANDROID */
         #record-btn {
             width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
             cursor: pointer; display: flex; align-items: center; justify-content: center; 
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: transform 0.2s; outline: none;
+            touch-action: none; user-select: none; -webkit-user-select: none;
         }
 
         /* LOGOMARCA INTERATIVA E MÁSCARA DO REFLEXO */
@@ -168,9 +169,9 @@
             
             <button id="record-btn" 
                     onclick="event.stopPropagation();"
-                    onpointerdown="event.stopPropagation(); startRecording();"
-                    onpointerup="event.stopPropagation(); stopRecording();"
-                    onpointerleave="event.stopPropagation(); stopRecording();">
+                    ontouchstart="event.stopPropagation(); event.preventDefault(); startRecording();"
+                    ontouchend="event.stopPropagation(); event.preventDefault(); stopRecording();"
+                    ontouchcancel="event.stopPropagation(); event.preventDefault(); stopRecording();">
                 <div id="record-btn-inner" style="width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s;"></div>
             </button>
             
@@ -179,7 +180,7 @@
     </div>
 
     <script>
-        // --- GERENCIAMENTO DE SENHAS E AUTO-LOGIN (1 MÊS) ---
+        // --- GERENCIAMENTO DE SENHAS ---
         function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -200,7 +201,6 @@
 
         function login() {
             const passwordInput = document.getElementById('pass').value;
-            
             if(typeof vips !== 'undefined' && vips.includes(passwordInput)) {
                 localStorage.setItem('app_senha', passwordInput);
                 localStorage.setItem('app_data_login', Date.now());
@@ -233,7 +233,7 @@
                 });
                 video.srcObject = stream;
             } catch (err) {
-                console.warn("Microfone indisponível, iniciando sem áudio...", err);
+                console.warn("Iniciando sem microfone...", err);
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
@@ -276,7 +276,6 @@
         function loadLogo(e) {
             const file = e.target.files[0];
             const objectUrl = URL.createObjectURL(file);
-            
             logoRender.src = objectUrl;
             
             shine.style.webkitMaskImage = `url(${objectUrl})`;
@@ -303,7 +302,7 @@
             speed = Math.max(0.01, Math.min(speed, 0.15)); 
         }
 
-        // --- GESTOS TOUCH ---
+        // --- GESTOS TOUCH NO LOGO ---
         let posX=0, posY=0, lastX=0, lastY=0, scale=1, lastScale=1, startDist=0;
 
         wrapper.addEventListener('touchstart', e => {
@@ -331,12 +330,11 @@
 
         const uiTop = document.getElementById('ui-top');
         const uiBottom = document.getElementById('ui-bottom');
-
         function hideControls() { uiTop.classList.add('hidden-ui'); uiBottom.classList.add('hidden-ui'); }
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- 🔥 MOTOR DE GRAVAÇÃO INVISÍVEL COM RESOLUÇÃO ADAPTATIVA PROFISSIONAL ---
+        // --- 🔥 MOTOR DE GRAVAÇÃO COM CORREÇÃO DEFINITIVA PARA ANDROID (ÁUDIO + GIRO) ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
@@ -348,16 +346,16 @@
         function drawRecordingFrame() {
             if (!isRecording) return;
 
-            // Desenha o vídeo de fundo no Canvas (redimensiona automaticamente para a resolução escolhida)
+            // 1. Desenha a imagem de fundo da câmera
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
+            // 2. Se houver logo ativa, insere na posição exata
             if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
                 const videoRect = video.getBoundingClientRect();
                 const logoRect = logoRender.getBoundingClientRect();
 
-                // Fatores de escala dinâmicos baseados na resolução atual do Canvas
                 const scaleXFactor = recordingCanvas.width / videoRect.width;
                 const scaleYFactor = recordingCanvas.height / videoRect.height;
 
@@ -371,8 +369,12 @@
                 const canvasLogoH = logoRect.height * scaleYFactor;
 
                 recordCtx.translate(canvasLogoX, canvasLogoY);
-                recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                 
+                // 🔥 MELHORIA HISTÓRICA: Aplica o efeito tridimensional de giro horizontal diretamente no vídeo gravado!
+                let scaleX = Math.abs(Math.sin(counter));
+                recordCtx.scale(scaleX, 1);
+                
+                recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                 recordCtx.restore();
             }
 
@@ -381,7 +383,6 @@
 
         async function startRecording() {
             if (isRecording) return;
-
             recordingStartTime = Date.now();
 
             document.getElementById('record-btn-inner').style.borderRadius = '4px';
@@ -390,11 +391,11 @@
 
             recordedChunks = [];
             
-            // 🔥 OTIMIZAÇÃO HISTÓRICA: Se for Android, usa 720p estável. Se for iPhone, usa resolução máxima.
+            // 🔥 AJUSTE CRUCIAL DE RESOLUÇÃO: qHD no Android (Extremamente fluido) e Full HD no iPhone
             const isAndroid = /Android/i.test(navigator.userAgent);
             if (isAndroid) {
-                recordingCanvas.width = 720;
-                recordingCanvas.height = 1280;
+                recordingCanvas.width = 540;   
+                recordingCanvas.height = 960;
             } else {
                 recordingCanvas.width = video.videoWidth || 1080;
                 recordingCanvas.height = video.videoHeight || 1920;
@@ -403,24 +404,36 @@
             isRecording = true;
             drawRecordingFrame();
 
-            // Captura o fluxo visual limpo do Canvas
-            recordingStream = recordingCanvas.captureStream(30);
+            // Puxa o fluxo de vídeo puro do Canvas
+            recordingStream = recordingCanvas.captureStream(isAndroid ? 24 : 30);
 
-            // Injeta a faixa de áudio ativa do microfone direto no fluxo de gravação
+            // 🔥 CORREÇÃO DO TRAVAMENTO DO ANDROID: Junta os canais criando um MediaStream limpo do zero
+            let combinedStream;
             if (stream && stream.getAudioTracks().length > 0) {
-                const micTrack = stream.getAudioTracks()[0];
-                recordingStream.addTrack(micTrack);
+                combinedStream = new MediaStream([
+                    recordingStream.getVideoTracks()[0],
+                    stream.getAudioTracks()[0]
+                ]);
+            } else {
+                combinedStream = recordingStream;
             }
 
-            // Seleção inteligente do codec suportado por cada aparelho
-            let options = { mimeType: 'video/webm;codecs=vp9' };
-            if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/webm;codecs=vp8' };
-            if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/webm' };
-            if (!MediaRecorder.isTypeSupported(options)) options = { mimeType: 'video/mp4' };
-            if (!MediaRecorder.isTypeSupported(options)) options = {};
+            // Seleção de Codecs nativos e estáveis por sistema operacional
+            let options = {};
+            if (isAndroid) {
+                if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 2500000 };
+                } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                    options = { mimeType: 'video/webm', videoBitsPerSecond: 2500000 };
+                }
+            } else {
+                if (MediaRecorder.isTypeSupported('video/mp4')) {
+                    options = { mimeType: 'video/mp4' };
+                }
+            }
 
             try {
-                mediaRecorder = new MediaRecorder(recordingStream, options);
+                mediaRecorder = new MediaRecorder(combinedStream, options);
 
                 mediaRecorder.ondataavailable = (e) => {
                     if (e.data && e.data.size > 0) {
@@ -441,6 +454,7 @@
                     downloadLink.download = `logocam_pro_${Date.now()}.${ext}`;
                     document.body.appendChild(downloadLink);
 
+                    // Força a chamada nativa do gerenciador de downloads do Android/Chrome
                     downloadLink.click();
 
                     setTimeout(() => {
@@ -464,7 +478,6 @@
             isRecording = false;
 
             resetRecordButton();
-
             const duration = Date.now() - recordingStartTime;
 
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -472,17 +485,10 @@
                     mediaRecorder.ondataavailable = null;
                     mediaRecorder.onstop = null;
                     try { mediaRecorder.stop(); } catch(e) {}
-                    if (recordingStream) {
-                        recordingStream.getTracks().forEach(track => track.stop());
-                    }
                     alert("⚠️ Segure o botão para gravar! Um clique rápido não gera vídeo.");
                     return;
                 }
                 mediaRecorder.stop();
-            }
-
-            if (recordingStream) {
-                recordingStream.getTracks().forEach(track => track.stop());
             }
         }
 
