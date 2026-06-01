@@ -264,7 +264,6 @@
             if(stream) stream.getTracks().forEach(t => t.stop());
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    // Solicita frameRate específico para aliviar processamento nativo
                     video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } }, 
                     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
                 });
@@ -298,7 +297,7 @@
         let speed = 0.04; 
         let isPaused = false;
         let lastAnimTime = 0;
-        let currentScaleX = 1; // Variável global única de escala
+        let currentScaleX = 1;
 
         function animateLogo(timestamp) {
             requestAnimationFrame(animateLogo);
@@ -311,7 +310,7 @@
 
             if (!isPaused) {
                 counter += (speed * (TARGET_FPS / 30)); 
-                currentScaleX = Math.abs(Math.sin(counter)); // Calcula apenas uma vez
+                currentScaleX = Math.abs(Math.sin(counter)); 
                 containerInner.style.transform = `scaleX(${currentScaleX})`;
             }
         }
@@ -352,7 +351,7 @@
                 scale = Math.max(0.3, Math.min(lastScale * (d/startDist), 3)); 
             }
             wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-            isLayoutDirty = true; // Avisa o renderizador que a posição mudou
+            isLayoutDirty = true; 
         });
 
         const uiTop = document.getElementById('ui-top');
@@ -365,6 +364,7 @@
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
+        let isProcessingRecord = false; // Trava de segurança para o botão
         let recordingCanvas = document.createElement('canvas');
         let recordCtx = recordingCanvas.getContext('2d');
         let recordingStream;
@@ -380,7 +380,6 @@
             if (elapsed < FPS_INTERVAL) return;
             lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
 
-            // Atualiza o cache de posições SOMENTE se algo mudou
             if (isLayoutDirty) updateLayoutCache();
 
             recordCtx.imageSmoothingEnabled = false;
@@ -406,8 +405,6 @@
                 const canvasLogoH = cachedLogoRect.height * scaleYFactor;
 
                 recordCtx.translate(canvasLogoX, canvasLogoY);
-                
-                // Usa a variável global calculada pela animação principal (evita dessincronização)
                 recordCtx.scale(currentScaleX, 1);
                 
                 recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
@@ -416,17 +413,22 @@
         }
 
         function toggleRecording() {
+            if (isProcessingRecord) return; 
+            isProcessingRecord = true;
+
             if (!isRecording) {
                 startRecording();
+                setTimeout(() => { isProcessingRecord = false; }, 1000);
             } else {
                 stopRecording();
+                setTimeout(() => { isProcessingRecord = false; }, 1000);
             }
         }
 
         async function startRecording() {
             if (isRecording) return;
             isRecording = true;
-            isLayoutDirty = true; // Força uma leitura limpa antes de gravar
+            isLayoutDirty = true; 
 
             const btnInner = document.getElementById('record-btn-inner');
             btnInner.style.borderRadius = '4px';
@@ -456,17 +458,16 @@
 
             let options = {};
             if (isAndroid) {
-                // Tenta forçar mp4 primeiro no Android, senão cai para webm mais leve
-                if (MediaRecorder.isTypeSupported('video/mp4')) {
-                    options = { mimeType: 'video/mp4', audioBitsPerSecond: 64000 };
-                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-                    options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 1500000, audioBitsPerSecond: 64000 };
+                // Força estritamente o WebM (VP8) no Android. O MP4 causa crash no MediaRecorder com Canvas.
+                if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 2500000 };
                 } else {
-                    options = { mimeType: 'video/webm', videoBitsPerSecond: 1500000, audioBitsPerSecond: 64000 };
+                    options = { mimeType: 'video/webm', videoBitsPerSecond: 2500000 };
                 }
             } else {
+                // iOS lida perfeitamente com MP4 nativo
                 if (MediaRecorder.isTypeSupported('video/mp4')) {
-                    options = { mimeType: 'video/mp4', audioBitsPerSecond: 64000 };
+                    options = { mimeType: 'video/mp4', videoBitsPerSecond: 2500000 };
                 }
             }
 
