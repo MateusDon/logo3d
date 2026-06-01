@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>LogoCam Pro</title>
+    <title>FiltroLogo3D</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FiltroLogo3D">
     <meta name="mobile-web-app-capable" content="yes">
     
     <link rel="icon" type="image/x-icon" href="favicon.ico">
@@ -16,8 +17,6 @@
     <link rel="manifest" href="site.webmanifest">
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    
-    <script src="senhas.js"></script>
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -126,10 +125,10 @@
     <div id="login-screen">
         <div class="login-box">
             <img src="logo.png" alt="Logo Premium" style="width: 100%; max-width: 100%; margin: 0 auto 20px auto; display: block; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">
-            <p style="opacity:0.6; font-size: 13px; margin-top: 5px;">Acesso Exclusivo</p>
-            <input type="password" id="pass" placeholder="Digite sua senha de acesso">
+            <p style="opacity:0.6; font-size: 13px; margin-top: 5px;">Acesso Exclusivo por Plataforma</p>
+            <input type="text" id="pass" placeholder="Código da sua logomarca">
             <button onclick="login()">ENTRAR NO APP</button>
-            <p id="err" style="color: #f87171; margin-top: 15px; font-size: 14px; display: none;">Senha incorreta!</p>
+            <p id="err" style="color: #f87171; margin-top: 15px; font-size: 14px; display: none;">Logomarca não encontrada!</p>
         </div>
         
         <a href="https://instagram.com/dogz_criativa" target="_blank" style="margin-top: 25px; color: rgba(255,255,255,0.8); text-decoration: none; font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
@@ -144,16 +143,15 @@
             <button class="btn" title="Inverter Câmera" onclick="event.stopPropagation(); switchCam();">
                 <i class="fa-solid fa-camera-rotate"></i>
             </button>
-            <button class="btn" title="Escolher Logo" onclick="event.stopPropagation(); document.getElementById('upload').click();">
-                <i class="fa-solid fa-image"></i>
-            </button>
             <button class="btn" id="pause-btn" title="Pausar/Girar" onclick="event.stopPropagation(); togglePause();">
                 <i class="fa-solid fa-pause" id="pause-icon"></i>
             </button>
             <button class="btn btn-clean" title="Modo Limpo" onclick="event.stopPropagation(); hideControls();">
                 <i class="fa-solid fa-eye-slash"></i>
             </button>
-            <input type="file" id="upload" accept="image/png" style="display:none" onchange="loadLogo(event)">
+            <button class="btn" title="Voltar ao Início" onclick="event.stopPropagation(); voltarAoInicio();" style="color: #67e8f9;">
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
         </div>
 
         <div id="logo-wrapper">
@@ -175,7 +173,22 @@
     </div>
 
     <script>
-        // --- GERENCIAMENTO DE SENHAS ---
+        // --- CONSTANTES DE CONFIGURAÇÃO DE DESEMPENHO ---
+        const TARGET_FPS = 24;
+        const FPS_INTERVAL = 1000 / TARGET_FPS; 
+
+        // Caches globais de dimensões para impedir o travamento (Anti-Layout Thrashing)
+        let cachedVideoRect = { left: 0, top: 0, width: 100, height: 100 };
+        let cachedLogoRect = { left: 0, top: 0, width: 100, height: 100 };
+
+        function updateCachedRects() {
+            if (video && logoRender && wrapper.style.display !== 'none') {
+                cachedVideoRect = video.getBoundingClientRect();
+                cachedLogoRect = logoRender.getBoundingClientRect();
+            }
+        }
+
+        // --- GERENCIAMENTO DE LOGOS E ACESSO ---
         function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -183,38 +196,97 @@
             if (senhaSalva && dataLogin) {
                 const umMesEmMilissegundos = 30 * 24 * 60 * 60 * 1000;
                 const expirou = (Date.now() - parseInt(dataLogin)) > umMesEmMilissegundos;
-                const senhaAindaEValida = typeof vips !== 'undefined' && vips.includes(senhaSalva);
 
-                if (!expirou && senhaAindaEValida) {
-                    liberarAcesso();
-                } else {
-                    localStorage.removeItem('app_senha');
-                    localStorage.removeItem('app_data_login');
+                if (!expirou) {
+                    const logoUrl = `logos/${senhaSalva}.png`;
+                    const imgTest = new Image();
+                    imgTest.onload = function() {
+                        setupLogoFromUrl(logoUrl);
+                        liberarAcesso();
+                    };
+                    imgTest.onerror = function() {
+                        limparCredenciais();
+                    };
+                    imgTest.src = logoUrl;
+                    return;
                 }
+                limparCredenciais();
             }
         }
 
         function login() {
-            const passwordInput = document.getElementById('pass').value;
-            if(typeof vips !== 'undefined' && vips.includes(passwordInput)) {
-                localStorage.setItem('app_senha', passwordInput);
+            const logoName = document.getElementById('pass').value.trim().toLowerCase();
+            if(!logoName) return;
+
+            document.getElementById('err').style.display = 'none';
+            const logoUrl = `logos/${logoName}.png`;
+
+            const imgTest = new Image();
+            imgTest.onload = function() {
+                localStorage.setItem('app_senha', logoName);
                 localStorage.setItem('app_data_login', Date.now());
+                setupLogoFromUrl(logoUrl);
                 liberarAcesso();
-            } else { 
-                document.getElementById('err').style.display='block'; 
-            }
+            };
+            imgTest.onerror = function() {
+                document.getElementById('err').innerText = "Código de logomarca inválido ou expirado!";
+                document.getElementById('err').style.display = 'block';
+            };
+            imgTest.src = logoUrl;
+        }
+
+        function setupLogoFromUrl(url) {
+            logoRender.src = url;
+            
+            shine.style.webkitMaskImage = `url(${url})`;
+            shine.style.webkitMaskSize = 'contain';
+            shine.style.webkitMaskRepeat = 'no-repeat';
+            shine.style.webkitMaskPosition = 'center';
+            
+            shine.style.maskImage = `url(${url})`;
+            shine.style.maskSize = 'contain';
+            shine.style.maskRepeat = 'no-repeat';
+            shine.style.maskPosition = 'center';
+            
+            wrapper.style.display = 'block';
+            setTimeout(updateCachedRects, 300);
         }
 
         function liberarAcesso() {
             document.getElementById('login-screen').style.display='none';
             document.getElementById('app-container').style.display='block';
             initCamera();
+            setTimeout(updateCachedRects, 1000);
+        }
+
+        function voltarAoInicio() {
+            if (isRecording) stopRecording();
+            limparCredenciais();
+
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+
+            logoRender.src = "";
+            wrapper.style.display = 'none';
+            
+            document.getElementById('app-container').style.display='none';
+            document.getElementById('login-screen').style.display='flex';
+            document.getElementById('pass').value = "";
+            document.getElementById('err').style.display = 'none';
+        }
+
+        function limparCredenciais() {
+            localStorage.removeItem('app_senha');
+            localStorage.removeItem('app_data_login');
         }
 
         window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
+        window.addEventListener('resize', updateCachedRects);
 
 
-        // --- CONTROLE DA CÂMERA E AUDIO ---
+        // --- CONTROLE DA CÂMERA E ÁUDIO OTIMIZADO ---
         let stream;
         let camMode = "environment"; 
         const video = document.getElementById('preview');
@@ -223,15 +295,20 @@
             if(stream) stream.getTracks().forEach(t => t.stop());
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
-                    audio: true
+                    video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 } }, 
+                    audio: {
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
                 });
                 video.srcObject = stream;
             } catch (err) {
                 console.warn("Iniciando sem microfone...", err);
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
+                        video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 } }, 
                         audio: false
                     });
                     video.srcObject = stream;
@@ -244,9 +321,10 @@
         function switchCam() { 
             camMode = camMode === "user" ? "environment" : "user"; 
             initCamera(); 
+            setTimeout(updateCachedRects, 1000);
         }
 
-        // --- ANIMAÇÃO DE GIRO E REFLEXO ---
+        // --- ANIMAÇÃO DE GIRO E REFLEXO TRAVADA EM 24 FPS ---
         const wrapper = document.getElementById('logo-wrapper');
         const containerInner = document.getElementById('logo-container-inner');
         const logoRender = document.getElementById('logo-img');
@@ -255,36 +333,26 @@
         let counter = 0;
         let speed = 0.04; 
         let isPaused = false;
+        let lastAnimTime = 0;
 
-        function animateLogo() {
+        function animateLogo(timestamp) {
+            requestAnimationFrame(animateLogo);
+            
+            if (!timestamp) timestamp = performance.now();
+            const elapsed = timestamp - lastAnimTime;
+            
+            if (elapsed < FPS_INTERVAL) return;
+            lastAnimTime = timestamp - (elapsed % FPS_INTERVAL);
+
             if (!isPaused) {
-                counter += speed;
+                counter += (speed * (TARGET_FPS / 30)); 
                 let scaleX = Math.abs(Math.sin(counter));
                 containerInner.style.transform = `scaleX(${scaleX})`;
                 let shinePos = (Math.sin(counter) * 150) + 50;
                 shine.style.backgroundPosition = `${shinePos}% 0`;
             }
-            requestAnimationFrame(animateLogo);
         }
         animateLogo();
-
-        function loadLogo(e) {
-            const file = e.target.files[0];
-            const objectUrl = URL.createObjectURL(file);
-            logoRender.src = objectUrl;
-            
-            shine.style.webkitMaskImage = `url(${objectUrl})`;
-            shine.style.webkitMaskSize = 'contain';
-            shine.style.webkitMaskRepeat = 'no-repeat';
-            shine.style.webkitMaskPosition = 'center';
-            
-            shine.style.maskImage = `url(${objectUrl})`;
-            shine.style.maskSize = 'contain';
-            shine.style.maskRepeat = 'no-repeat';
-            shine.style.maskPosition = 'center';
-            
-            wrapper.style.display = 'block';
-        }
         
         function togglePause() { 
             isPaused = !isPaused;
@@ -297,7 +365,7 @@
             speed = Math.max(0.01, Math.min(speed, 0.15)); 
         }
 
-        // --- GESTOS TOUCH NO LOGO ---
+        // --- GESTOS TOUCH NO LOGO OTIMIZADOS ---
         let posX=0, posY=0, lastX=0, lastY=0, scale=1, lastScale=1, startDist=0;
 
         wrapper.addEventListener('touchstart', e => {
@@ -321,6 +389,9 @@
                 scale = Math.max(0.3, Math.min(lastScale * (d/startDist), 3)); 
             }
             wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+            
+            // Otimização: Só recalcula quando move o dedo, aliviando o motor de gravação
+            updateCachedRects();
         });
 
         const uiTop = document.getElementById('ui-top');
@@ -329,24 +400,39 @@
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- 🔥 MOTOR DE GRAVAÇÃO OTIMIZADO ULTRA-LIGHT COM SELETOR DE CLIQUE ---
+        // --- MOTOR DE GRAVAÇÃO ULTRA OTIMIZADO (ANTI-TRAVAMENTO) ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
         let recordingCanvas = document.createElement('canvas');
         let recordCtx = recordingCanvas.getContext('2d');
         let recordingStream;
+        let lastRecordFrameTime = 0;
 
-        function drawRecordingFrame() {
+        function drawRecordingFrame(timestamp) {
             if (!isRecording) return;
+            requestAnimationFrame(drawRecordingFrame);
+
+            if (!timestamp) timestamp = performance.now();
+            const elapsed = timestamp - lastRecordFrameTime;
+            
+            if (elapsed < FPS_INTERVAL) return;
+            lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
+
+            // Desativa a suavização de imagem para poupar ciclos brutos da GPU Adreno antiga
+            recordCtx.imageSmoothingEnabled = false;
+            recordCtx.mozImageSmoothingEnabled = false;
+            recordCtx.webkitImageSmoothingEnabled = false;
+            recordCtx.msImageSmoothingEnabled = false;
 
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
             if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
-                const videoRect = video.getBoundingClientRect();
-                const logoRect = logoRender.getBoundingClientRect();
+                // PUXA DOS VALORES SALVOS EM CACHE (Não causa travamento no Moto G6 Play)
+                const videoRect = cachedVideoRect;
+                const logoRect = cachedLogoRect;
 
                 const scaleXFactor = recordingCanvas.width / videoRect.width;
                 const scaleYFactor = recordingCanvas.height / videoRect.height;
@@ -368,8 +454,6 @@
                 recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                 recordCtx.restore();
             }
-
-            requestAnimationFrame(drawRecordingFrame);
         }
 
         function toggleRecording() {
@@ -382,9 +466,11 @@
 
         async function startRecording() {
             if (isRecording) return;
+            
+            // Recalcula o tamanho exato da tela uma única vez logo no clique
+            updateCachedRects();
             isRecording = true;
 
-            // Transforma o botão interno em quadrado (visual de gravação ativa)
             const btnInner = document.getElementById('record-btn-inner');
             btnInner.style.borderRadius = '4px';
             btnInner.style.scale = '0.8';
@@ -392,18 +478,34 @@
 
             recordedChunks = [];
             
-            const isAndroid = /Android/i.test(navigator.userAgent);
+            const ua = navigator.userAgent;
+            const isAndroid = /Android/i.test(ua);
+            // Salva-vidas do Moto G6: Detecta se é um Android antigo (Android 5, 6, 7, 8 ou 9)
+            const isOldAndroid = /Android\s([5-9]\.)/i.test(ua); 
+
+            let videoBitrate = 1500000; // Padrão 1.5 Mbps
+
             if (isAndroid) {
-                // Calibração super leve para rodar liso em qualquer Android
-                recordingCanvas.width = 540;   
-                recordingCanvas.height = 960;
+                if (isOldAndroid) {
+                    // SE FOR MOTO G6 PLAY (Android 8): Grava em 540p com bitrate suave para rodar 100% liso
+                    recordingCanvas.width = 540;   
+                    recordingCanvas.height = 960;
+                    videoBitrate = 900000; // 900 kbps alivia o codificador do processador antigo
+                } else {
+                    // Androids modernos permanecem em 720p HD
+                    recordingCanvas.width = 720;   
+                    recordingCanvas.height = 1280;
+                }
             } else {
-                recordingCanvas.width = video.videoWidth || 1080;
-                recordingCanvas.height = video.videoHeight || 1920;
+                // iOS (iPhone) permanece em 720p HD
+                recordingCanvas.width = 720;
+                recordingCanvas.height = 1280;
             }
 
+            lastRecordFrameTime = performance.now();
             drawRecordingFrame();
-            recordingStream = recordingCanvas.captureStream(isAndroid ? 20 : 30);
+            
+            recordingStream = recordingCanvas.captureStream(TARGET_FPS);
 
             let combinedStream;
             if (stream && stream.getAudioTracks().length > 0) {
@@ -418,13 +520,24 @@
             let options = {};
             if (isAndroid) {
                 if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 1500000 };
+                    options = { 
+                        mimeType: 'video/webm;codecs=vp8,opus', 
+                        videoBitsPerSecond: videoBitrate,
+                        audioBitsPerSecond: 64000 
+                    };
                 } else if (MediaRecorder.isTypeSupported('video/webm')) {
-                    options = { mimeType: 'video/webm', videoBitsPerSecond: 1500000 };
+                    options = { 
+                        mimeType: 'video/webm', 
+                        videoBitsPerSecond: videoBitrate,
+                        audioBitsPerSecond: 64000 
+                    };
                 }
             } else {
                 if (MediaRecorder.isTypeSupported('video/mp4')) {
-                    options = { mimeType: 'video/mp4' };
+                    options = { 
+                        mimeType: 'video/mp4',
+                        audioBitsPerSecond: 64000 
+                    };
                 }
             }
 
@@ -459,14 +572,11 @@
                         URL.revokeObjectURL(fileUrl);
                     }, 4000);
 
-                    // 🔥 LIMPEZA PROFUNDA ANTI-BUG: Destrói fluxos antigos para liberar a RAM do Android
                     if (recordingStream) {
                         recordingStream.getTracks().forEach(track => track.stop());
                     }
                 };
 
-                // 🔥 CORREÇÃO DO CONGESTIONAMENTO: Inicia sem passar tempo fracionado (sem o "100")
-                // Isso faz o Android empacotar tudo de uma vez só no final, sem travar no meio!
                 mediaRecorder.start();
             } catch (err) {
                 console.error("Erro ao iniciar gravação:", err);
