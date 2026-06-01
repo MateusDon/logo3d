@@ -165,7 +165,18 @@
         function updateCachedRects() {
             if (video && logoRender && wrapper.style.display !== 'none') {
                 cachedVideoRect = video.getBoundingClientRect();
+                
+                // 🔥 SOLUÇÃO DO BUG DO GIRO NA GRAVAÇÃO:
+                // Salvamos o estado atual do giro, forçamos ela a ficar reta (scaleX(1)) 
+                // apenas para medir o tamanho real e estável sem interferência da animação.
+                const currentTransform = containerInner.style.transform;
+                containerInner.style.transform = 'scaleX(1)';
+                
+                // Captura a caixa de tamanho correta
                 cachedLogoRect = logoRender.getBoundingClientRect();
+                
+                // Restaura instantaneamente o giro original antes do navegador redesenhar a tela
+                containerInner.style.transform = currentTransform;
             }
         }
 
@@ -357,7 +368,6 @@
             }
             wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
             
-            // Otimização: Só recalcula quando move o dedo, aliviando o motor de gravação
             updateCachedRects();
         });
 
@@ -386,7 +396,6 @@
             if (elapsed < FPS_INTERVAL) return;
             lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
 
-            // Desativa a suavização de imagem para poupar ciclos brutos da GPU Adreno antiga
             recordCtx.imageSmoothingEnabled = false;
             recordCtx.mozImageSmoothingEnabled = false;
             recordCtx.webkitImageSmoothingEnabled = false;
@@ -397,7 +406,6 @@
             if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
-                // PUXA DOS VALORES SALVOS EM CACHE
                 const videoRect = cachedVideoRect;
                 const logoRect = cachedLogoRect;
 
@@ -434,7 +442,6 @@
         async function startRecording() {
             if (isRecording) return;
             
-            // Recalcula o tamanho exato da tela uma única vez logo no clique
             updateCachedRects();
             isRecording = true;
 
@@ -447,24 +454,20 @@
             
             const ua = navigator.userAgent;
             const isAndroid = /Android/i.test(ua);
-            // Salva-vidas para Android antigo (Android 5, 6, 7, 8 ou 9)
             const isOldAndroid = /Android\s([5-9]\.)/i.test(ua); 
 
-            let videoBitrate = 1500000; // Padrão 1.5 Mbps
+            let videoBitrate = 1500000; 
 
             if (isAndroid) {
                 if (isOldAndroid) {
-                    // Grava em 540p com bitrate suave para rodar 100% liso em hardwares limitados
                     recordingCanvas.width = 540;   
                     recordingCanvas.height = 960;
-                    videoBitrate = 900000; // 900 kbps alivia o codificador do processador antigo
+                    videoBitrate = 900000; 
                 } else {
-                    // Androids modernos permanecem em 720p HD
                     recordingCanvas.width = 720;   
                     recordingCanvas.height = 1280;
                 }
             } else {
-                // iOS (iPhone) permanece em 720p HD
                 recordingCanvas.width = 720;
                 recordingCanvas.height = 1280;
             }
