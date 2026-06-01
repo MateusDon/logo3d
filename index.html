@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>LogoCam Pro</title>
+    <title>FiltroLogo3D</title>
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FiltroLogo3D">
     <meta name="mobile-web-app-capable" content="yes">
     
     <link rel="icon" type="image/x-icon" href="favicon.ico">
@@ -280,7 +281,7 @@
             if(stream) stream.getTracks().forEach(t => t.stop());
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
+                    video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 } }, 
                     // Configuração: Força captura em mono (1 canal) mantendo os filtros de processamento ativos
                     audio: {
                         channelCount: 1,
@@ -294,7 +295,7 @@
                 console.warn("Iniciando sem microfone...", err);
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
+                        video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 } }, 
                         audio: false
                     });
                     video.srcObject = stream;
@@ -401,6 +402,12 @@
             if (elapsed < FPS_INTERVAL) return;
             lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
 
+            // Otimização: Desativa a suavização de imagem para poupar ciclos de processamento do hardware
+            recordCtx.imageSmoothingEnabled = false;
+            recordCtx.mozImageSmoothingEnabled = false;
+            recordCtx.webkitImageSmoothingEnabled = false;
+            recordCtx.msImageSmoothingEnabled = false;
+
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
             if (wrapper.style.display !== 'none' && logoRender.src) {
@@ -452,11 +459,13 @@
             
             const isAndroid = /Android/i.test(navigator.userAgent);
             if (isAndroid) {
-                recordingCanvas.width = 540;   
-                recordingCanvas.height = 960;
+                // Configuração Android: Atualizado para gravar em 720p HD sob medida
+                recordingCanvas.width = 720;   
+                recordingCanvas.height = 1280;
             } else {
-                recordingCanvas.width = video.videoWidth || 1080;
-                recordingCanvas.height = video.videoHeight || 1920;
+                // Configuração iOS: Mantido em 720p HD para não superaquecer iPhones antigos
+                recordingCanvas.width = 720;
+                recordingCanvas.height = 1280;
             }
 
             lastRecordFrameTime = performance.now();
