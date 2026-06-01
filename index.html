@@ -43,12 +43,12 @@
         #app-container { display: none; width: 100%; height: 100%; position: relative; }
         video#preview { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; z-index: 1; }
 
-        /* BARRA SUPERIOR MODERNA - Blur reduzido para performance */
+        /* BARRA SUPERIOR MODERNA COM ÍCONES AMPLIADOS */
         .top-bar { 
             position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 16px; z-index: 10; padding: 10px 20px;
-            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px); border-radius: 40px;
+            background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px); border-radius: 40px;
             border: 1px solid rgba(255, 255, 255, 0.18);
             transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -69,20 +69,20 @@
             padding: 0 40px; z-index: 10; transition: opacity 0.3s ease;
         }
         .speed-btn {
-            width: 52px; height: 52px; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px);
+            width: 52px; height: 52px; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 50%; color: white; font-size: 22px;
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* BOTÃO DE GRAVAR MODERNO */
+        /* BOTÃO DE GRAVAR MODERNO COM CLIQUE ÚNICO (START/STOP) */
         #record-btn {
             width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
             cursor: pointer; display: flex; align-items: center; justify-content: center; 
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: all 0.3s ease; outline: none;
         }
 
-        /* LOGOMARCA INTERATIVA */
+        /* LOGOMARCA INTERATIVA E MÁSCARA DO REFLEXO */
         #logo-wrapper {
             position: absolute; top: 35%; left: 25%; z-index: 5;
             touch-action: none; display: none;
@@ -97,6 +97,24 @@
         #logo-img {
             width: 100%;
             display: block;
+        }
+
+        /* CAMADA DO REFLEXO LUMINOSO DENTRO DA LOGO */
+        #logo-shine {
+            position: absolute;
+            inset: 0;
+            mix-blend-mode: source-atop; 
+            background: linear-gradient(
+                90deg, 
+                rgba(255, 255, 255, 0) 0%, 
+                rgba(255, 255, 255, 0.03) 25%, 
+                rgba(255, 255, 255, 0.45) 50%, 
+                rgba(255, 255, 255, 0.03) 75%, 
+                rgba(255, 255, 255, 0) 100%
+            );
+            background-size: 200% 100%;
+            background-position: 150% 0;
+            pointer-events: none;
         }
 
         .hidden-ui { opacity: 0 !important; pointer-events: none !important; }
@@ -139,6 +157,7 @@
         <div id="logo-wrapper">
             <div id="logo-container-inner">
                 <img id="logo-img" src="" alt="Logo do Cliente">
+                <div id="logo-shine"></div>
             </div>
         </div>
 
@@ -156,23 +175,9 @@
     <script>
         // --- CONSTANTES DE CONFIGURAÇÃO DE DESEMPENHO ---
         const TARGET_FPS = 24;
-        const FPS_INTERVAL = 1000 / TARGET_FPS;
+        const FPS_INTERVAL = 1000 / TARGET_FPS; // ~41.66ms por quadro
 
-        // --- CACHE DE GEOMETRIA (MATA O LAYOUT THRASHING) ---
-        let isLayoutDirty = true;
-        let cachedVideoRect = null;
-        let cachedLogoRect = null;
-
-        function updateLayoutCache() {
-            if (!video || !logoRender) return;
-            cachedVideoRect = video.getBoundingClientRect();
-            cachedLogoRect = logoRender.getBoundingClientRect();
-            isLayoutDirty = false;
-        }
-
-        window.addEventListener('resize', () => { isLayoutDirty = true; });
-
-        // --- GERENCIAMENTO DE LOGOS ---
+        // --- GERENCIAMENTO DE LOGOS E ACESSO VIA GITHUB ---
         function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -188,7 +193,9 @@
                         setupLogoFromUrl(logoUrl);
                         liberarAcesso();
                     };
-                    imgTest.onerror = function() { limparCredenciais(); };
+                    imgTest.onerror = function() {
+                        limparCredenciais();
+                    };
                     imgTest.src = logoUrl;
                     return;
                 }
@@ -219,8 +226,18 @@
 
         function setupLogoFromUrl(url) {
             logoRender.src = url;
+            
+            shine.style.webkitMaskImage = `url(${url})`;
+            shine.style.webkitMaskSize = 'contain';
+            shine.style.webkitMaskRepeat = 'no-repeat';
+            shine.style.webkitMaskPosition = 'center';
+            
+            shine.style.maskImage = `url(${url})`;
+            shine.style.maskSize = 'contain';
+            shine.style.maskRepeat = 'no-repeat';
+            shine.style.maskPosition = 'center';
+            
             wrapper.style.display = 'block';
-            isLayoutDirty = true; // Força recálculo ao carregar logo nova
         }
 
         function liberarAcesso() {
@@ -255,7 +272,7 @@
         window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
 
 
-        // --- CONTROLE DA CÂMERA OTIMIZADO ---
+        // --- CONTROLE DA CÂMERA E ÁUDIO OTIMIZADO ---
         let stream;
         let camMode = "environment"; 
         const video = document.getElementById('preview');
@@ -264,15 +281,21 @@
             if(stream) stream.getTracks().forEach(t => t.stop());
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } }, 
-                    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 } }, 
+                    // Configuração: Força captura em mono (1 canal) mantendo os filtros de processamento ativos
+                    audio: {
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
                 });
                 video.srcObject = stream;
             } catch (err) {
                 console.warn("Iniciando sem microfone...", err);
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } }, 
+                        video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 } }, 
                         audio: false
                     });
                     video.srcObject = stream;
@@ -280,7 +303,6 @@
                     alert("A permissão da câmera é necessária.");
                 }
             }
-            video.onloadedmetadata = () => { isLayoutDirty = true; };
         }
 
         function switchCam() { 
@@ -288,16 +310,16 @@
             initCamera(); 
         }
 
-        // --- ANIMAÇÃO UNIFICADA E SINCRONIZADA ---
+        // --- ANIMAÇÃO DE GIRO E REFLEXO TRAVADA EM 24 FPS ---
         const wrapper = document.getElementById('logo-wrapper');
         const containerInner = document.getElementById('logo-container-inner');
         const logoRender = document.getElementById('logo-img');
+        const shine = document.getElementById('logo-shine');
         
         let counter = 0;
         let speed = 0.04; 
         let isPaused = false;
         let lastAnimTime = 0;
-        let currentScaleX = 1;
 
         function animateLogo(timestamp) {
             requestAnimationFrame(animateLogo);
@@ -310,8 +332,10 @@
 
             if (!isPaused) {
                 counter += (speed * (TARGET_FPS / 30)); 
-                currentScaleX = Math.abs(Math.sin(counter)); 
-                containerInner.style.transform = `scaleX(${currentScaleX})`;
+                let scaleX = Math.abs(Math.sin(counter));
+                containerInner.style.transform = `scaleX(${scaleX})`;
+                let shinePos = (Math.sin(counter) * 150) + 50;
+                shine.style.backgroundPosition = `${shinePos}% 0`;
             }
         }
         animateLogo();
@@ -327,7 +351,7 @@
             speed = Math.max(0.01, Math.min(speed, 0.15)); 
         }
 
-        // --- GESTOS TOUCH ---
+        // --- GESTOS TOUCH NO LOGO ---
         let posX=0, posY=0, lastX=0, lastY=0, scale=1, lastScale=1, startDist=0;
 
         wrapper.addEventListener('touchstart', e => {
@@ -351,7 +375,6 @@
                 scale = Math.max(0.3, Math.min(lastScale * (d/startDist), 3)); 
             }
             wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-            isLayoutDirty = true; 
         });
 
         const uiTop = document.getElementById('ui-top');
@@ -360,11 +383,10 @@
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- MOTOR DE GRAVAÇÃO OTIMIZADO ---
+        // --- MOTOR DE GRAVAÇÃO SINCRONIZADO EM 24 FPS ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
-        let isProcessingRecord = false; // Trava de segurança para o botão
         let recordingCanvas = document.createElement('canvas');
         let recordCtx = recordingCanvas.getContext('2d');
         let recordingStream;
@@ -380,8 +402,7 @@
             if (elapsed < FPS_INTERVAL) return;
             lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
 
-            if (isLayoutDirty) updateLayoutCache();
-
+            // Otimização: Desativa a suavização de imagem para poupar ciclos de processamento do hardware
             recordCtx.imageSmoothingEnabled = false;
             recordCtx.mozImageSmoothingEnabled = false;
             recordCtx.webkitImageSmoothingEnabled = false;
@@ -389,23 +410,28 @@
 
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
-            if (wrapper.style.display !== 'none' && logoRender.src && cachedVideoRect && cachedLogoRect) {
+            if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
-                const scaleXFactor = recordingCanvas.width / cachedVideoRect.width;
-                const scaleYFactor = recordingCanvas.height / cachedVideoRect.height;
+                const videoRect = video.getBoundingClientRect();
+                const logoRect = logoRender.getBoundingClientRect();
 
-                const logoCenterX = cachedLogoRect.left + cachedLogoRect.width / 2;
-                const logoCenterY = cachedLogoRect.top + cachedLogoRect.height / 2;
+                const scaleXFactor = recordingCanvas.width / videoRect.width;
+                const scaleYFactor = recordingCanvas.height / videoRect.height;
 
-                const canvasLogoX = (logoCenterX - cachedVideoRect.left) * scaleXFactor;
-                const canvasLogoY = (logoCenterY - cachedVideoRect.top) * scaleYFactor;
+                const logoCenterX = logoRect.left + logoRect.width / 2;
+                const logoCenterY = logoRect.top + logoRect.height / 2;
 
-                const canvasLogoW = cachedLogoRect.width * scaleXFactor;
-                const canvasLogoH = cachedLogoRect.height * scaleYFactor;
+                const canvasLogoX = (logoCenterX - videoRect.left) * scaleXFactor;
+                const canvasLogoY = (logoCenterY - videoRect.top) * scaleYFactor;
+
+                const canvasLogoW = logoRect.width * scaleXFactor;
+                const canvasLogoH = logoRect.height * scaleYFactor;
 
                 recordCtx.translate(canvasLogoX, canvasLogoY);
-                recordCtx.scale(currentScaleX, 1);
+                
+                let scaleX = Math.abs(Math.sin(counter));
+                recordCtx.scale(scaleX, 1);
                 
                 recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                 recordCtx.restore();
@@ -413,22 +439,16 @@
         }
 
         function toggleRecording() {
-            if (isProcessingRecord) return; 
-            isProcessingRecord = true;
-
             if (!isRecording) {
                 startRecording();
-                setTimeout(() => { isProcessingRecord = false; }, 1000);
             } else {
                 stopRecording();
-                setTimeout(() => { isProcessingRecord = false; }, 1000);
             }
         }
 
         async function startRecording() {
             if (isRecording) return;
             isRecording = true;
-            isLayoutDirty = true; 
 
             const btnInner = document.getElementById('record-btn-inner');
             btnInner.style.borderRadius = '4px';
@@ -438,8 +458,15 @@
             recordedChunks = [];
             
             const isAndroid = /Android/i.test(navigator.userAgent);
-            recordingCanvas.width = 720;   
-            recordingCanvas.height = 1280;
+            if (isAndroid) {
+                // Configuração Android: Atualizado para gravar em 720p HD sob medida
+                recordingCanvas.width = 720;   
+                recordingCanvas.height = 1280;
+            } else {
+                // Configuração iOS: Mantido em 720p HD para não superaquecer iPhones antigos
+                recordingCanvas.width = 720;
+                recordingCanvas.height = 1280;
+            }
 
             lastRecordFrameTime = performance.now();
             drawRecordingFrame();
@@ -456,18 +483,28 @@
                 combinedStream = recordingStream;
             }
 
+            // Otimização crucial do Gravador: Vídeo controlado e taxa de áudio travada em 64 kbps (64000)
             let options = {};
             if (isAndroid) {
-                // Força estritamente o WebM (VP8) no Android. O MP4 causa crash no MediaRecorder com Canvas.
                 if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 2500000 };
-                } else {
-                    options = { mimeType: 'video/webm', videoBitsPerSecond: 2500000 };
+                    options = { 
+                        mimeType: 'video/webm;codecs=vp8,opus', 
+                        videoBitsPerSecond: 1500000,
+                        audioBitsPerSecond: 64000 
+                    };
+                } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                    options = { 
+                        mimeType: 'video/webm', 
+                        videoBitsPerSecond: 1500000,
+                        audioBitsPerSecond: 64000 
+                    };
                 }
             } else {
-                // iOS lida perfeitamente com MP4 nativo
                 if (MediaRecorder.isTypeSupported('video/mp4')) {
-                    options = { mimeType: 'video/mp4', videoBitsPerSecond: 2500000 };
+                    options = { 
+                        mimeType: 'video/mp4',
+                        audioBitsPerSecond: 64000 
+                    };
                 }
             }
 
@@ -518,7 +555,9 @@
         function stopRecording() {
             if (!isRecording) return;
             isRecording = false;
+
             resetRecordButton();
+
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
