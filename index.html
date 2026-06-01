@@ -209,7 +209,6 @@
             document.getElementById('err').style.display = 'none';
             const logoUrl = `logos/${logoName}.png`;
 
-            // Faz a verificação nativa testando o carregamento da imagem na pasta logos
             const imgTest = new Image();
             imgTest.onload = function() {
                 localStorage.setItem('app_senha', logoName);
@@ -227,7 +226,6 @@
         function setupLogoFromUrl(url) {
             logoRender.src = url;
             
-            // Mascaramento otimizado usando caminhos diretos da pasta
             shine.style.webkitMaskImage = `url(${url})`;
             shine.style.webkitMaskSize = 'contain';
             shine.style.webkitMaskRepeat = 'no-repeat';
@@ -273,7 +271,7 @@
         window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
 
 
-        // --- CONTROLE DA CÂMERA E AUDIO ---
+        // --- CONTROLE DA CÂMERA E ÁUDIO OTIMIZADO ---
         let stream;
         let camMode = "environment"; 
         const video = document.getElementById('preview');
@@ -283,7 +281,13 @@
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: camMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, 
-                    audio: true
+                    // Configuração: Força captura em mono (1 canal) mantendo os filtros de processamento ativos
+                    audio: {
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
                 });
                 video.srcObject = stream;
             } catch (err) {
@@ -322,12 +326,11 @@
             if (!timestamp) timestamp = performance.now();
             const elapsed = timestamp - lastAnimTime;
             
-            // Só executa o desenho se atingir a janela de tempo de 24 FPS
             if (elapsed < FPS_INTERVAL) return;
             lastAnimTime = timestamp - (elapsed % FPS_INTERVAL);
 
             if (!isPaused) {
-                counter += (speed * (TARGET_FPS / 30)); // Mantém a velocidade equilibrada a 24 FPS
+                counter += (speed * (TARGET_FPS / 30)); 
                 let scaleX = Math.abs(Math.sin(counter));
                 containerInner.style.transform = `scaleX(${scaleX})`;
                 let shinePos = (Math.sin(counter) * 150) + 50;
@@ -395,7 +398,6 @@
             if (!timestamp) timestamp = performance.now();
             const elapsed = timestamp - lastRecordFrameTime;
             
-            // Só grava o frame do canvas alinhado rigorosamente a 24 FPS
             if (elapsed < FPS_INTERVAL) return;
             lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
 
@@ -460,7 +462,6 @@
             lastRecordFrameTime = performance.now();
             drawRecordingFrame();
             
-            // Otimização crucial: Captura exatamente a taxa estável de 24 FPS
             recordingStream = recordingCanvas.captureStream(TARGET_FPS);
 
             let combinedStream;
@@ -473,16 +474,28 @@
                 combinedStream = recordingStream;
             }
 
+            // Otimização crucial do Gravador: Vídeo controlado e taxa de áudio travada em 64 kbps (64000)
             let options = {};
             if (isAndroid) {
                 if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 1500000 };
+                    options = { 
+                        mimeType: 'video/webm;codecs=vp8,opus', 
+                        videoBitsPerSecond: 1500000,
+                        audioBitsPerSecond: 64000 
+                    };
                 } else if (MediaRecorder.isTypeSupported('video/webm')) {
-                    options = { mimeType: 'video/webm', videoBitsPerSecond: 1500000 };
+                    options = { 
+                        mimeType: 'video/webm', 
+                        videoBitsPerSecond: 1500000,
+                        audioBitsPerSecond: 64000 
+                    };
                 }
             } else {
                 if (MediaRecorder.isTypeSupported('video/mp4')) {
-                    options = { mimeType: 'video/mp4' };
+                    options = { 
+                        mimeType: 'video/mp4',
+                        audioBitsPerSecond: 64000 
+                    };
                 }
             }
 
