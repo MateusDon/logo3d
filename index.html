@@ -175,20 +175,9 @@
     <script>
         // --- CONSTANTES DE CONFIGURAÇÃO DE DESEMPENHO ---
         const TARGET_FPS = 24;
-        const FPS_INTERVAL = 1000 / TARGET_FPS; 
+        const FPS_INTERVAL = 1000 / TARGET_FPS; // ~41.66ms por quadro
 
-        // Caches globais de dimensões para impedir o travamento (Anti-Layout Thrashing)
-        let cachedVideoRect = { left: 0, top: 0, width: 100, height: 100 };
-        let cachedLogoRect = { left: 0, top: 0, width: 100, height: 100 };
-
-        function updateCachedRects() {
-            if (video && logoRender && wrapper.style.display !== 'none') {
-                cachedVideoRect = video.getBoundingClientRect();
-                cachedLogoRect = logoRender.getBoundingClientRect();
-            }
-        }
-
-        // --- GERENCIAMENTO DE LOGOS E ACESSO ---
+        // --- GERENCIAMENTO DE LOGOS E ACESSO VIA GITHUB ---
         function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -249,14 +238,12 @@
             shine.style.maskPosition = 'center';
             
             wrapper.style.display = 'block';
-            setTimeout(updateCachedRects, 300);
         }
 
         function liberarAcesso() {
             document.getElementById('login-screen').style.display='none';
             document.getElementById('app-container').style.display='block';
             initCamera();
-            setTimeout(updateCachedRects, 1000);
         }
 
         function voltarAoInicio() {
@@ -283,7 +270,6 @@
         }
 
         window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
-        window.addEventListener('resize', updateCachedRects);
 
 
         // --- CONTROLE DA CÂMERA E ÁUDIO OTIMIZADO ---
@@ -296,6 +282,7 @@
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: camMode, width: { ideal: 1280 }, height: { ideal: 720 } }, 
+                    // Configuração: Força captura em mono (1 canal) mantendo os filtros de processamento ativos
                     audio: {
                         channelCount: 1,
                         echoCancellation: true,
@@ -321,7 +308,6 @@
         function switchCam() { 
             camMode = camMode === "user" ? "environment" : "user"; 
             initCamera(); 
-            setTimeout(updateCachedRects, 1000);
         }
 
         // --- ANIMAÇÃO DE GIRO E REFLEXO TRAVADA EM 24 FPS ---
@@ -365,7 +351,7 @@
             speed = Math.max(0.01, Math.min(speed, 0.15)); 
         }
 
-        // --- GESTOS TOUCH NO LOGO OTIMIZADOS ---
+        // --- GESTOS TOUCH NO LOGO ---
         let posX=0, posY=0, lastX=0, lastY=0, scale=1, lastScale=1, startDist=0;
 
         wrapper.addEventListener('touchstart', e => {
@@ -389,9 +375,6 @@
                 scale = Math.max(0.3, Math.min(lastScale * (d/startDist), 3)); 
             }
             wrapper.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-            
-            // Otimização: Só recalcula quando move o dedo, aliviando o motor de gravação
-            updateCachedRects();
         });
 
         const uiTop = document.getElementById('ui-top');
@@ -400,7 +383,7 @@
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- MOTOR DE GRAVAÇÃO ULTRA OTIMIZADO (ANTI-TRAVAMENTO) ---
+        // --- MOTOR DE GRAVAÇÃO SINCRONIZADO EM 24 FPS ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
@@ -419,7 +402,7 @@
             if (elapsed < FPS_INTERVAL) return;
             lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
 
-            // Desativa a suavização de imagem para poupar ciclos brutos da GPU Adreno antiga
+            // Otimização: Desativa a suavização de imagem para poupar ciclos de processamento do hardware
             recordCtx.imageSmoothingEnabled = false;
             recordCtx.mozImageSmoothingEnabled = false;
             recordCtx.webkitImageSmoothingEnabled = false;
@@ -430,9 +413,8 @@
             if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
-                // PUXA DOS VALORES SALVOS EM CACHE (Não causa travamento no Moto G6 Play)
-                const videoRect = cachedVideoRect;
-                const logoRect = cachedLogoRect;
+                const videoRect = video.getBoundingClientRect();
+                const logoRect = logoRender.getBoundingClientRect();
 
                 const scaleXFactor = recordingCanvas.width / videoRect.width;
                 const scaleYFactor = recordingCanvas.height / videoRect.height;
@@ -466,9 +448,6 @@
 
         async function startRecording() {
             if (isRecording) return;
-            
-            // Recalcula o tamanho exato da tela uma única vez logo no clique
-            updateCachedRects();
             isRecording = true;
 
             const btnInner = document.getElementById('record-btn-inner');
@@ -478,26 +457,13 @@
 
             recordedChunks = [];
             
-            const ua = navigator.userAgent;
-            const isAndroid = /Android/i.test(ua);
-            // Salva-vidas do Moto G6: Detecta se é um Android antigo (Android 5, 6, 7, 8 ou 9)
-            const isOldAndroid = /Android\s([5-9]\.)/i.test(ua); 
-
-            let videoBitrate = 1500000; // Padrão 1.5 Mbps
-
+            const isAndroid = /Android/i.test(navigator.userAgent);
             if (isAndroid) {
-                if (isOldAndroid) {
-                    // SE FOR MOTO G6 PLAY (Android 8): Grava em 540p com bitrate suave para rodar 100% liso
-                    recordingCanvas.width = 540;   
-                    recordingCanvas.height = 960;
-                    videoBitrate = 900000; // 900 kbps alivia o codificador do processador antigo
-                } else {
-                    // Androids modernos permanecem em 720p HD
-                    recordingCanvas.width = 720;   
-                    recordingCanvas.height = 1280;
-                }
+                // Configuração Android: Atualizado para gravar em 720p HD sob medida
+                recordingCanvas.width = 720;   
+                recordingCanvas.height = 1280;
             } else {
-                // iOS (iPhone) permanece em 720p HD
+                // Configuração iOS: Mantido em 720p HD para não superaquecer iPhones antigos
                 recordingCanvas.width = 720;
                 recordingCanvas.height = 1280;
             }
@@ -517,18 +483,19 @@
                 combinedStream = recordingStream;
             }
 
+            // Otimização crucial do Gravador: Vídeo controlado e taxa de áudio travada em 64 kbps (64000)
             let options = {};
             if (isAndroid) {
                 if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
                     options = { 
                         mimeType: 'video/webm;codecs=vp8,opus', 
-                        videoBitsPerSecond: videoBitrate,
+                        videoBitsPerSecond: 1500000,
                         audioBitsPerSecond: 64000 
                     };
                 } else if (MediaRecorder.isTypeSupported('video/webm')) {
                     options = { 
                         mimeType: 'video/webm', 
-                        videoBitsPerSecond: videoBitrate,
+                        videoBitsPerSecond: 1500000,
                         audioBitsPerSecond: 64000 
                     };
                 }
