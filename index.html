@@ -17,8 +17,6 @@
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
-    <script src="senhas.js"></script>
-    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body, html { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -126,10 +124,10 @@
     <div id="login-screen">
         <div class="login-box">
             <img src="logo.png" alt="Logo Premium" style="width: 100%; max-width: 100%; margin: 0 auto 20px auto; display: block; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">
-            <p style="opacity:0.6; font-size: 13px; margin-top: 5px;">Acesso Exclusivo</p>
-            <input type="password" id="pass" placeholder="Digite sua senha de acesso">
+            <p style="opacity:0.6; font-size: 13px; margin-top: 5px;">Acesso Exclusivo por Plataforma</p>
+            <input type="text" id="pass" placeholder="Código da sua logomarca">
             <button onclick="login()">ENTRAR NO APP</button>
-            <p id="err" style="color: #f87171; margin-top: 15px; font-size: 14px; display: none;">Senha incorreta!</p>
+            <p id="err" style="color: #f87171; margin-top: 15px; font-size: 14px; display: none;">Logomarca não encontrada!</p>
         </div>
         
         <a href="https://instagram.com/dogz_criativa" target="_blank" style="margin-top: 25px; color: rgba(255,255,255,0.8); text-decoration: none; font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
@@ -144,16 +142,15 @@
             <button class="btn" title="Inverter Câmera" onclick="event.stopPropagation(); switchCam();">
                 <i class="fa-solid fa-camera-rotate"></i>
             </button>
-            <button class="btn" title="Escolher Logo" onclick="event.stopPropagation(); document.getElementById('upload').click();">
-                <i class="fa-solid fa-image"></i>
-            </button>
             <button class="btn" id="pause-btn" title="Pausar/Girar" onclick="event.stopPropagation(); togglePause();">
                 <i class="fa-solid fa-pause" id="pause-icon"></i>
             </button>
             <button class="btn btn-clean" title="Modo Limpo" onclick="event.stopPropagation(); hideControls();">
                 <i class="fa-solid fa-eye-slash"></i>
             </button>
-            <input type="file" id="upload" accept="image/png" style="display:none" onchange="loadLogo(event)">
+            <button class="btn" title="Voltar ao Início" onclick="event.stopPropagation(); voltarAoInicio();" style="color: #67e8f9;">
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
         </div>
 
         <div id="logo-wrapper">
@@ -175,7 +172,11 @@
     </div>
 
     <script>
-        // --- GERENCIAMENTO DE SENHAS ---
+        // --- CONSTANTES DE CONFIGURAÇÃO DE DESEMPENHO ---
+        const TARGET_FPS = 24;
+        const FPS_INTERVAL = 1000 / TARGET_FPS; // ~41.66ms por quadro
+
+        // --- GERENCIAMENTO DE LOGOS E ACESSO VIA GITHUB ---
         function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -183,32 +184,90 @@
             if (senhaSalva && dataLogin) {
                 const umMesEmMilissegundos = 30 * 24 * 60 * 60 * 1000;
                 const expirou = (Date.now() - parseInt(dataLogin)) > umMesEmMilissegundos;
-                const senhaAindaEValida = typeof vips !== 'undefined' && vips.includes(senhaSalva);
 
-                if (!expirou && senhaAindaEValida) {
-                    liberarAcesso();
-                } else {
-                    localStorage.removeItem('app_senha');
-                    localStorage.removeItem('app_data_login');
+                if (!expirou) {
+                    const logoUrl = `logos/${senhaSalva}.png`;
+                    const imgTest = new Image();
+                    imgTest.onload = function() {
+                        setupLogoFromUrl(logoUrl);
+                        liberarAcesso();
+                    };
+                    imgTest.onerror = function() {
+                        limparCredenciais();
+                    };
+                    imgTest.src = logoUrl;
+                    return;
                 }
+                limparCredenciais();
             }
         }
 
         function login() {
-            const passwordInput = document.getElementById('pass').value;
-            if(typeof vips !== 'undefined' && vips.includes(passwordInput)) {
-                localStorage.setItem('app_senha', passwordInput);
+            const logoName = document.getElementById('pass').value.trim().toLowerCase();
+            if(!logoName) return;
+
+            document.getElementById('err').style.display = 'none';
+            const logoUrl = `logos/${logoName}.png`;
+
+            // Faz a verificação nativa testando o carregamento da imagem na pasta logos
+            const imgTest = new Image();
+            imgTest.onload = function() {
+                localStorage.setItem('app_senha', logoName);
                 localStorage.setItem('app_data_login', Date.now());
+                setupLogoFromUrl(logoUrl);
                 liberarAcesso();
-            } else { 
-                document.getElementById('err').style.display='block'; 
-            }
+            };
+            imgTest.onerror = function() {
+                document.getElementById('err').innerText = "Código de logomarca inválido ou expirado!";
+                document.getElementById('err').style.display = 'block';
+            };
+            imgTest.src = logoUrl;
+        }
+
+        function setupLogoFromUrl(url) {
+            logoRender.src = url;
+            
+            // Mascaramento otimizado usando caminhos diretos da pasta
+            shine.style.webkitMaskImage = `url(${url})`;
+            shine.style.webkitMaskSize = 'contain';
+            shine.style.webkitMaskRepeat = 'no-repeat';
+            shine.style.webkitMaskPosition = 'center';
+            
+            shine.style.maskImage = `url(${url})`;
+            shine.style.maskSize = 'contain';
+            shine.style.maskRepeat = 'no-repeat';
+            shine.style.maskPosition = 'center';
+            
+            wrapper.style.display = 'block';
         }
 
         function liberarAcesso() {
             document.getElementById('login-screen').style.display='none';
             document.getElementById('app-container').style.display='block';
             initCamera();
+        }
+
+        function voltarAoInicio() {
+            if (isRecording) stopRecording();
+            limparCredenciais();
+
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+
+            logoRender.src = "";
+            wrapper.style.display = 'none';
+            
+            document.getElementById('app-container').style.display='none';
+            document.getElementById('login-screen').style.display='flex';
+            document.getElementById('pass').value = "";
+            document.getElementById('err').style.display = 'none';
+        }
+
+        function limparCredenciais() {
+            localStorage.removeItem('app_senha');
+            localStorage.removeItem('app_data_login');
         }
 
         window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
@@ -246,7 +305,7 @@
             initCamera(); 
         }
 
-        // --- ANIMAÇÃO DE GIRO E REFLEXO ---
+        // --- ANIMAÇÃO DE GIRO E REFLEXO TRAVADA EM 24 FPS ---
         const wrapper = document.getElementById('logo-wrapper');
         const containerInner = document.getElementById('logo-container-inner');
         const logoRender = document.getElementById('logo-img');
@@ -255,36 +314,27 @@
         let counter = 0;
         let speed = 0.04; 
         let isPaused = false;
+        let lastAnimTime = 0;
 
-        function animateLogo() {
+        function animateLogo(timestamp) {
+            requestAnimationFrame(animateLogo);
+            
+            if (!timestamp) timestamp = performance.now();
+            const elapsed = timestamp - lastAnimTime;
+            
+            // Só executa o desenho se atingir a janela de tempo de 24 FPS
+            if (elapsed < FPS_INTERVAL) return;
+            lastAnimTime = timestamp - (elapsed % FPS_INTERVAL);
+
             if (!isPaused) {
-                counter += speed;
+                counter += (speed * (TARGET_FPS / 30)); // Mantém a velocidade equilibrada a 24 FPS
                 let scaleX = Math.abs(Math.sin(counter));
                 containerInner.style.transform = `scaleX(${scaleX})`;
                 let shinePos = (Math.sin(counter) * 150) + 50;
                 shine.style.backgroundPosition = `${shinePos}% 0`;
             }
-            requestAnimationFrame(animateLogo);
         }
         animateLogo();
-
-        function loadLogo(e) {
-            const file = e.target.files[0];
-            const objectUrl = URL.createObjectURL(file);
-            logoRender.src = objectUrl;
-            
-            shine.style.webkitMaskImage = `url(${objectUrl})`;
-            shine.style.webkitMaskSize = 'contain';
-            shine.style.webkitMaskRepeat = 'no-repeat';
-            shine.style.webkitMaskPosition = 'center';
-            
-            shine.style.maskImage = `url(${objectUrl})`;
-            shine.style.maskSize = 'contain';
-            shine.style.maskRepeat = 'no-repeat';
-            shine.style.maskPosition = 'center';
-            
-            wrapper.style.display = 'block';
-        }
         
         function togglePause() { 
             isPaused = !isPaused;
@@ -329,16 +379,25 @@
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- 🔥 MOTOR DE GRAVAÇÃO OTIMIZADO ULTRA-LIGHT COM SELETOR DE CLIQUE ---
+        // --- MOTOR DE GRAVAÇÃO SINCRONIZADO EM 24 FPS ---
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
         let recordingCanvas = document.createElement('canvas');
         let recordCtx = recordingCanvas.getContext('2d');
         let recordingStream;
+        let lastRecordFrameTime = 0;
 
-        function drawRecordingFrame() {
+        function drawRecordingFrame(timestamp) {
             if (!isRecording) return;
+            requestAnimationFrame(drawRecordingFrame);
+
+            if (!timestamp) timestamp = performance.now();
+            const elapsed = timestamp - lastRecordFrameTime;
+            
+            // Só grava o frame do canvas alinhado rigorosamente a 24 FPS
+            if (elapsed < FPS_INTERVAL) return;
+            lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
 
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
@@ -368,8 +427,6 @@
                 recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                 recordCtx.restore();
             }
-
-            requestAnimationFrame(drawRecordingFrame);
         }
 
         function toggleRecording() {
@@ -384,7 +441,6 @@
             if (isRecording) return;
             isRecording = true;
 
-            // Transforma o botão interno em quadrado (visual de gravação ativa)
             const btnInner = document.getElementById('record-btn-inner');
             btnInner.style.borderRadius = '4px';
             btnInner.style.scale = '0.8';
@@ -394,7 +450,6 @@
             
             const isAndroid = /Android/i.test(navigator.userAgent);
             if (isAndroid) {
-                // Calibração super leve para rodar liso em qualquer Android
                 recordingCanvas.width = 540;   
                 recordingCanvas.height = 960;
             } else {
@@ -402,8 +457,11 @@
                 recordingCanvas.height = video.videoHeight || 1920;
             }
 
+            lastRecordFrameTime = performance.now();
             drawRecordingFrame();
-            recordingStream = recordingCanvas.captureStream(isAndroid ? 20 : 30);
+            
+            // Otimização crucial: Captura exatamente a taxa estável de 24 FPS
+            recordingStream = recordingCanvas.captureStream(TARGET_FPS);
 
             let combinedStream;
             if (stream && stream.getAudioTracks().length > 0) {
@@ -459,14 +517,11 @@
                         URL.revokeObjectURL(fileUrl);
                     }, 4000);
 
-                    // 🔥 LIMPEZA PROFUNDA ANTI-BUG: Destrói fluxos antigos para liberar a RAM do Android
                     if (recordingStream) {
                         recordingStream.getTracks().forEach(track => track.stop());
                     }
                 };
 
-                // 🔥 CORREÇÃO DO CONGESTIONAMENTO: Inicia sem passar tempo fracionado (sem o "100")
-                // Isso faz o Android empacotar tudo de uma vez só no final, sem travar no meio!
                 mediaRecorder.start();
             } catch (err) {
                 console.error("Erro ao iniciar gravação:", err);
