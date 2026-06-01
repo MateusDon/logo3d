@@ -82,7 +82,7 @@
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: all 0.3s ease; outline: none;
         }
 
-        /* LOGOMARCA INTERATIVA E MÁSCARA DO REFLEXO */
+        /* LOGOMARCA INTERATIVA */
         #logo-wrapper {
             position: absolute; top: 35%; left: 25%; z-index: 5;
             touch-action: none; display: none;
@@ -97,24 +97,6 @@
         #logo-img {
             width: 100%;
             display: block;
-        }
-
-        /* CAMADA DO REFLEXO LUMINOSO DENTRO DA LOGO */
-        #logo-shine {
-            position: absolute;
-            inset: 0;
-            mix-blend-mode: source-atop; 
-            background: linear-gradient(
-                90deg, 
-                rgba(255, 255, 255, 0) 0%, 
-                rgba(255, 255, 255, 0.03) 25%, 
-                rgba(255, 255, 255, 0.45) 50%, 
-                rgba(255, 255, 255, 0.03) 75%, 
-                rgba(255, 255, 255, 0) 100%
-            );
-            background-size: 200% 100%;
-            background-position: 150% 0;
-            pointer-events: none;
         }
 
         .hidden-ui { opacity: 0 !important; pointer-events: none !important; }
@@ -157,7 +139,6 @@
         <div id="logo-wrapper">
             <div id="logo-container-inner">
                 <img id="logo-img" src="" alt="Logo do Cliente">
-                <div id="logo-shine"></div>
             </div>
         </div>
 
@@ -237,17 +218,6 @@
 
         function setupLogoFromUrl(url) {
             logoRender.src = url;
-            
-            shine.style.webkitMaskImage = `url(${url})`;
-            shine.style.webkitMaskSize = 'contain';
-            shine.style.webkitMaskRepeat = 'no-repeat';
-            shine.style.webkitMaskPosition = 'center';
-            
-            shine.style.maskImage = `url(${url})`;
-            shine.style.maskSize = 'contain';
-            shine.style.maskRepeat = 'no-repeat';
-            shine.style.maskPosition = 'center';
-            
             wrapper.style.display = 'block';
             setTimeout(updateCachedRects, 300);
         }
@@ -324,11 +294,10 @@
             setTimeout(updateCachedRects, 1000);
         }
 
-        // --- ANIMAÇÃO DE GIRO E REFLEXO TRAVADA EM 24 FPS ---
+        // --- ANIMAÇÃO DE GIRO TRAVADA EM 24 FPS ---
         const wrapper = document.getElementById('logo-wrapper');
         const containerInner = document.getElementById('logo-container-inner');
         const logoRender = document.getElementById('logo-img');
-        const shine = document.getElementById('logo-shine');
         
         let counter = 0;
         let speed = 0.04; 
@@ -348,8 +317,6 @@
                 counter += (speed * (TARGET_FPS / 30)); 
                 let scaleX = Math.abs(Math.sin(counter));
                 containerInner.style.transform = `scaleX(${scaleX})`;
-                let shinePos = (Math.sin(counter) * 150) + 50;
-                shine.style.backgroundPosition = `${shinePos}% 0`;
             }
         }
         animateLogo();
@@ -430,7 +397,7 @@
             if (wrapper.style.display !== 'none' && logoRender.src) {
                 recordCtx.save();
 
-                // PUXA DOS VALORES SALVOS EM CACHE (Não causa travamento no Moto G6 Play)
+                // PUXA DOS VALORES SALVOS EM CACHE
                 const videoRect = cachedVideoRect;
                 const logoRect = cachedLogoRect;
 
@@ -480,14 +447,14 @@
             
             const ua = navigator.userAgent;
             const isAndroid = /Android/i.test(ua);
-            // Salva-vidas do Moto G6: Detecta se é um Android antigo (Android 5, 6, 7, 8 ou 9)
+            // Salva-vidas para Android antigo (Android 5, 6, 7, 8 ou 9)
             const isOldAndroid = /Android\s([5-9]\.)/i.test(ua); 
 
             let videoBitrate = 1500000; // Padrão 1.5 Mbps
 
             if (isAndroid) {
                 if (isOldAndroid) {
-                    // SE FOR MOTO G6 PLAY (Android 8): Grava em 540p com bitrate suave para rodar 100% liso
+                    // Grava em 540p com bitrate suave para rodar 100% liso em hardwares limitados
                     recordingCanvas.width = 540;   
                     recordingCanvas.height = 960;
                     videoBitrate = 900000; // 900 kbps alivia o codificador do processador antigo
