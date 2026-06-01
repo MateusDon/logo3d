@@ -28,6 +28,8 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;
         }
         .login-box { background: #1e293b; padding: 40px; border-radius: 24px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); width: 90%; max-width: 400px; }
+        .login-logo { width: 100%; max-width: 100%; margin: 0 auto 20px auto; display: block; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3)); }
+        .login-subtitle { opacity: 0.6; font-size: 13px; margin-top: 5px; }
         #login-screen input { padding: 15px; width: 100%; border: none; border-radius: 12px; margin-top: 20px; background: #334155; color: white; text-align: center; font-size: 18px; outline: none; }
         
         /* BOTÃO DE ENTRAR ROXO */
@@ -38,6 +40,11 @@
             transition: background 0.3s;
         }
         #login-screen button:active { background: #5b21b6; }
+        #err { color: #f87171; margin-top: 15px; font-size: 14px; display: none; }
+
+        /* LINK DO INSTAGRAM */
+        .instagram-link { margin-top: 25px; color: rgba(255,255,255,0.8); text-decoration: none; font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        .instagram-icon { font-size: 22px; color: #c026d3; }
 
         /* INTERFACE DO APLICATIVO */
         #app-container { display: none; width: 100%; height: 100%; position: relative; }
@@ -61,6 +68,7 @@
         }
         .btn:active { transform: scale(0.85); background: rgba(255, 255, 255, 0.25); }
         .btn-clean { color: #f87171; }
+        .btn-back { color: #67e8f9; }
 
         /* CONTROLES DE VELOCIDADE E GRAVAÇÃO INFERIORES */
         .bottom-bar {
@@ -75,17 +83,19 @@
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* BOTÃO DE GRAVAR MODERNO COM CLIQUE ÚNICO (START/STOP) */
+        /* BOTÃO DE GRAVAR MODERNO */
         #record-btn {
             width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
             cursor: pointer; display: flex; align-items: center; justify-content: center; 
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: all 0.3s ease; outline: none;
         }
+        #record-btn-inner { width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s; }
 
-        /* LOGOMARCA INTERATIVA */
+        /* LOGOMARCA INTERATIVA COM ACELERAÇÃO DE HARDWARE FIXADA */
         #logo-wrapper {
             position: absolute; top: 35%; left: 25%; z-index: 5;
             touch-action: none; display: none;
+            will-change: transform;
         }
         
         #logo-container-inner {
@@ -106,15 +116,15 @@
 
     <div id="login-screen">
         <div class="login-box">
-            <img src="logo.png" alt="Logo Premium" style="width: 100%; max-width: 100%; margin: 0 auto 20px auto; display: block; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">
-            <p style="opacity:0.6; font-size: 13px; margin-top: 5px;">Acesso Exclusivo por Plataforma</p>
+            <img src="logo.png" alt="Logo Premium" class="login-logo">
+            <p class="login-subtitle">Acesso Exclusivo por Plataforma</p>
             <input type="text" id="pass" placeholder="Código da sua logomarca">
             <button onclick="login()">ENTRAR NO APP</button>
-            <p id="err" style="color: #f87171; margin-top: 15px; font-size: 14px; display: none;">Logomarca não encontrada!</p>
+            <p id="err">Logomarca não encontrada!</p>
         </div>
         
-        <a href="https://instagram.com/dogz_criativa" target="_blank" style="margin-top: 25px; color: rgba(255,255,255,0.8); text-decoration: none; font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-brands fa-instagram" style="font-size: 22px; color: #c026d3;"></i> @dogz_criativa
+        <a href="https://instagram.com/dogz_criativa" target="_blank" class="instagram-link">
+            <i class="fa-brands fa-instagram" class="instagram-icon"></i> @dogz_criativa
         </a>
     </div>
 
@@ -131,7 +141,7 @@
             <button class="btn btn-clean" title="Modo Limpo" onclick="event.stopPropagation(); hideControls();">
                 <i class="fa-solid fa-eye-slash"></i>
             </button>
-            <button class="btn" title="Voltar ao Início" onclick="event.stopPropagation(); voltarAoInicio();" style="color: #67e8f9;">
+            <button class="btn btn-back" title="Voltar ao Início" onclick="event.stopPropagation(); voltarAoInicio();">
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
         </div>
@@ -146,7 +156,7 @@
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(-0.2);"><i class="fa-solid fa-minus"></i></button>
             
             <button id="record-btn" onclick="event.stopPropagation(); toggleRecording();">
-                <div id="record-btn-inner" style="width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s;"></div>
+                <div id="record-btn-inner"></div>
             </button>
             
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(0.2);"><i class="fa-solid fa-plus"></i></button>
@@ -167,15 +177,11 @@
                 cachedVideoRect = video.getBoundingClientRect();
                 
                 // 🔥 SOLUÇÃO DO BUG DO GIRO NA GRAVAÇÃO:
-                // Salvamos o estado atual do giro, forçamos ela a ficar reta (scaleX(1)) 
-                // apenas para medir o tamanho real e estável sem interferência da animação.
                 const currentTransform = containerInner.style.transform;
                 containerInner.style.transform = 'scaleX(1)';
                 
-                // Captura a caixa de tamanho correta
                 cachedLogoRect = logoRender.getBoundingClientRect();
                 
-                // Restaura instantaneamente o giro original antes do navegador redesenhar a tela
                 containerInner.style.transform = currentTransform;
             }
         }
@@ -249,6 +255,12 @@
                 stream = null;
             }
 
+            // OTIMIZAÇÃO: Limpeza completa do stream invisível do canvas ao sair
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(track => track.stop());
+                recordingStream = null;
+            }
+
             logoRender.src = "";
             wrapper.style.display = 'none';
             
@@ -264,7 +276,13 @@
         }
 
         window.addEventListener('DOMContentLoaded', verificarLoginSalvo);
-        window.addEventListener('resize', updateCachedRects);
+        
+        // OTIMIZAÇÃO: Mecanismo de Debounce para o evento Resize (Giro estável de tela)
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(updateCachedRects, 150);
+        });
 
 
         // --- CONTROLE DA CÂMERA E ÁUDIO OTIMIZADO ---
@@ -294,7 +312,7 @@
                     });
                     video.srcObject = stream;
                 } catch(finalErr) {
-                    alert("A permissão da câmera é necessária.");
+                    alert("A permissão da câmera é necessária para o funcionamento do filtro.");
                 }
             }
         }
@@ -396,10 +414,7 @@
             if (elapsed < FPS_INTERVAL) return;
             lastRecordFrameTime = timestamp - (elapsed % FPS_INTERVAL);
 
-            recordCtx.imageSmoothingEnabled = false;
-            recordCtx.mozImageSmoothingEnabled = false;
-            recordCtx.webkitImageSmoothingEnabled = false;
-            recordCtx.msImageSmoothingEnabled = false;
+            // OTIMIZAÇÃO: Remoção dos comandos redundantes de suavização que rodavam 24x por segundo aqui dentro
 
             recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
@@ -472,6 +487,12 @@
                 recordingCanvas.height = 1280;
             }
 
+            // OTIMIZAÇÃO: Definido o estado de renderização uma única vez fora do loop
+            recordCtx.imageSmoothingEnabled = false;
+            recordCtx.mozImageSmoothingEnabled = false;
+            recordCtx.webkitImageSmoothingEnabled = false;
+            recordCtx.msImageSmoothingEnabled = false;
+
             lastRecordFrameTime = performance.now();
             drawRecordingFrame();
             
@@ -511,48 +532,58 @@
                 }
             }
 
+            // OTIMIZAÇÃO: Mecanismo de Fallback robusto para iOS Safari
             try {
                 mediaRecorder = new MediaRecorder(combinedStream, options);
-
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) {
-                        recordedChunks.push(e.data);
-                    }
-                };
-
-                mediaRecorder.onstop = () => {
-                    if (recordedChunks.length === 0) return;
-
-                    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
-                    const fileUrl = URL.createObjectURL(blob);
-
-                    const downloadLink = document.createElement('a');
-                    downloadLink.href = fileUrl;
-
-                    const ext = (mediaRecorder.mimeType && mediaRecorder.mimeType.includes('mp4')) ? 'mp4' : 'webm';
-                    downloadLink.download = `logocam_pro_${Date.now()}.${ext}`;
-                    document.body.appendChild(downloadLink);
-
-                    downloadLink.click();
-
-                    setTimeout(() => {
-                        if (downloadLink.parentNode) {
-                            document.body.removeChild(downloadLink);
-                        }
-                        URL.revokeObjectURL(fileUrl);
-                    }, 4000);
-
-                    if (recordingStream) {
-                        recordingStream.getTracks().forEach(track => track.stop());
-                    }
-                };
-
-                mediaRecorder.start();
             } catch (err) {
-                console.error("Erro ao iniciar gravação:", err);
-                resetRecordButton();
-                isRecording = false;
+                console.warn("Falha com codecs rígidos, acionando inicializador padrão do dispositivo...", err);
+                try {
+                    // Fallback nativo: remove restrições específicas se o navegador rejeitar
+                    mediaRecorder = new MediaRecorder(combinedStream);
+                } catch(finalErr) {
+                    console.error("Erro fatal do MediaRecorder:", finalErr);
+                    resetRecordButton();
+                    isRecording = false;
+                    alert("Seu navegador atual não possui suporte nativo para a gravação de vídeos.");
+                    return;
+                }
             }
+
+            // Fluxo padrão pós-inicialização
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    recordedChunks.push(e.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                if (recordedChunks.length === 0) return;
+
+                const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
+                const fileUrl = URL.createObjectURL(blob);
+
+                const downloadLink = document.createElement('a');
+                downloadLink.href = fileUrl;
+
+                const ext = (mediaRecorder.mimeType && mediaRecorder.mimeType.includes('mp4')) ? 'mp4' : 'webm';
+                downloadLink.download = `logocam_pro_${Date.now()}.${ext}`;
+                document.body.appendChild(downloadLink);
+
+                downloadLink.click();
+
+                setTimeout(() => {
+                    if (downloadLink.parentNode) {
+                        document.body.removeChild(downloadLink);
+                    }
+                    URL.revokeObjectURL(fileUrl);
+                }, 4000);
+
+                if (recordingStream) {
+                    recordingStream.getTracks().forEach(track => track.stop());
+                }
+            };
+
+            mediaRecorder.start();
         }
 
         function stopRecording() {
