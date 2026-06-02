@@ -180,20 +180,20 @@
             }
         }
 
-        // --- SISTEMA DE CHECAGEM ANTI-CACHE COMPATÍVEL COM IOS ---
-        function verificarExistenciaNoServidor(nomeLogo) {
-            return new Promise((resolve) => {
-                const imgTeste = new Image();
-                // O timestamp (?t=...) força o iOS a fazer uma requisição real ao servidor ignorando a cache local
-                imgTeste.src = `logos/${nomeLogo}.png?t=${Date.now()}`;
-                
-                imgTeste.onload = () => {
-                    resolve(true); // Ficheiro existe no servidor
-                };
-                imgTeste.onerror = () => {
-                    resolve(false); // Ficheiro não existe (404) ou foi apagado
-                };
-            });
+        // --- VALIDAÇÃO REAL ANTI-CACHE (DÁ O CONTROLE ABSOLUTO A VOCÊ) ---
+        async function verificarExistenciaNoServidor(nomeLogo) {
+            try {
+                // O timestamp (?t=...) + cache: 'no-store' força o iOS a ir ao servidor checar em tempo real
+                const resposta = await fetch(`logos/${nomeLogo}.png?t=${Date.now()}`, {
+                    method: 'GET',
+                    cache: 'no-store',
+                    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                });
+                return resposta.ok; // Retorna true se a logo existir (200), false se foi apagada (404)
+            } catch (erro) {
+                console.error("Erro na validação:", erro);
+                return false; 
+            }
         }
 
         async function verificarLoginSalvo() {
@@ -205,16 +205,16 @@
                 const expirou = (Date.now() - parseInt(dataLogin)) > umMesEmMilissegundos;
 
                 if (!expirou) {
-                    // Força a validação no servidor
-                    const existe NoServidor = await verificarExistenciaNoServidor(senhaSalva);
+                    // Executa a checagem no servidor de forma obrigatória
+                    const existeNoServidor = await verificarExistenciaNoServidor(senhaSalva);
                     
                     if (existeNoServidor) {
-                        // Se existe, injeta a imagem com o cache-buster ativo para atualizar no visor do iOS
+                        // Se existe no servidor, carrega aplicando o cache-buster para atualizar a imagem na tela
                         const logoUrl = `logos/${senhaSalva}.png?t=${Date.now()}`;
                         setupLogoFromUrl(logoUrl);
                         liberarAcesso();
                     } else {
-                        // Se a logo foi apagada, limpa as credenciais locais e bloqueia o ecrã na hora!
+                        // Se você apagou do servidor, limpa o celular dele e chuta ele de volta pra tela de login
                         voltarAoInicio();
                     }
                     return;
@@ -229,7 +229,6 @@
 
             document.getElementById('err').style.display = 'none';
 
-            // Validação em tempo real ao digitar
             const existeNoServidor = await verificarExistenciaNoServidor(logoName);
             
             if (existeNoServidor) {
@@ -272,7 +271,7 @@
                 recordingStream = null;
             }
 
-            // Força a remoção do atributo para o motor WebKit apagar a imagem da memória de exibição
+            // Remove a imagem por completo para limpar a memória gráfica do iOS
             logoRender.removeAttribute('src');
             wrapper.style.display = 'none';
             
@@ -296,7 +295,7 @@
         });
 
 
-        // --- CONTROLE DA CÂMERA E ÁUDIO ---
+        // --- CONTROLE DA CÂMERA ---
         let stream;
         let camMode = "environment"; 
         const video = document.getElementById('preview');
