@@ -70,9 +70,9 @@
         .btn-clean { color: #f87171; }
         .btn-back { color: #67e8f9; }
 
-        /* CONTROLES INFERIORES */
+        /* CONTROLES INFERIORES REORGANIZADOS */
         .bottom-bar {
-            position: absolute; bottom: 50px; width: 100%;
+            position: absolute; bottom: 45px; width: 100%;
             display: flex; justify-content: space-between; align-items: center;
             padding: 0 40px; z-index: 10; transition: opacity 0.3s ease;
         }
@@ -83,13 +83,55 @@
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* BOTÃO DE GRAVAR */
+        /* CENTRALIZADOR DO BOTÃO E SELETOR */
+        .control-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        /* SELETOR DE MODO DISCRETO */
+        .mode-selector {
+            display: flex;
+            gap: 16px;
+            background: rgba(0, 0, 0, 0.45);
+            padding: 5px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .mode-item {
+            font-size: 11px;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+        }
+        .mode-item.active {
+            color: #ffffff;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+        }
+
+        /* BOTÃO DE CAPTURA DINÂMICO */
         #record-btn {
             width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
             cursor: pointer; display: flex; align-items: center; justify-content: center; 
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: all 0.3s ease; outline: none;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); transition: all 0.3s ease; outline: none;
         }
         #record-btn-inner { width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s; }
+
+        /* Estilo do botão em modo FOTO */
+        #record-btn.foto-mode {
+            background: #ffffff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+        #record-btn.foto-mode #record-btn-inner {
+            background: #1e293b;
+            scale: 0.9;
+        }
 
         /* LOGOMARCA INTERATIVA */
         #logo-wrapper {
@@ -97,22 +139,22 @@
             touch-action: none; display: none;
             will-change: transform;
         }
-        
-        #logo-container-inner {
-            position: relative;
-            width: 160px;
-            will-change: transform;
+        #logo-container-inner { position: relative; width: 160px; will-change: transform; }
+        #logo-img { width: 100%; display: block; }
+
+        /* FLASH DA CÂMERA */
+        #flash-overlay {
+            position: fixed; inset: 0; background: white; opacity: 0; pointer-events: none; z-index: 99999;
+            transition: opacity 0.15s ease-out;
         }
-        
-        #logo-img {
-            width: 100%;
-            display: block;
-        }
+        #flash-overlay.flash-active { opacity: 1; transition: none; }
 
         .hidden-ui { opacity: 0 !important; pointer-events: none !important; }
     </style>
 </head>
 <body>
+
+    <div id="flash-overlay"></div>
 
     <div id="login-screen">
         <div class="login-box">
@@ -155,9 +197,16 @@
         <div class="bottom-bar" id="ui-bottom">
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(-0.2);"><i class="fa-solid fa-minus"></i></button>
             
-            <button id="record-btn" onclick="event.stopPropagation(); toggleRecording();">
-                <div id="record-btn-inner"></div>
-            </button>
+            <div class="control-center">
+                <div class="mode-selector">
+                    <span id="mode-video" class="mode-item active" onclick="event.stopPropagation(); setCaptureMode('video');">VÍDEO</span>
+                    <span id="mode-foto" class="mode-item" onclick="event.stopPropagation(); setCaptureMode('foto');">FOTO</span>
+                </div>
+                
+                <button id="record-btn" onclick="event.stopPropagation(); handleCaptureAction();">
+                    <div id="record-btn-inner"></div>
+                </button>
+            </div>
             
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(0.2);"><i class="fa-solid fa-plus"></i></button>
         </div>
@@ -169,6 +218,7 @@
 
         let cachedVideoRect = { left: 0, top: 0, width: 100, height: 100 };
         let cachedLogoRect = { left: 0, top: 0, width: 100, height: 100 };
+        let currentMode = 'video'; // 'video' ou 'foto'
 
         function updateCachedRects() {
             if (video && logoRender && wrapper.style.display !== 'none') {
@@ -177,6 +227,31 @@
                 containerInner.style.transform = 'scaleX(1)';
                 cachedLogoRect = logoRender.getBoundingClientRect();
                 containerInner.style.transform = currentTransform;
+            }
+        }
+
+        // --- MUDANÇA DE MODO (FOTO / VÍDEO) ---
+        function setCaptureMode(mode) {
+            if (isRecording) return; // Impede mudar de modo gravando vídeo
+            currentMode = mode;
+            
+            document.getElementById('mode-video').classList.toggle('active', mode === 'video');
+            document.getElementById('mode-foto').classList.toggle('active', mode === 'foto');
+            
+            const mainBtn = document.getElementById('record-btn');
+            if (mode === 'foto') {
+                mainBtn.classList.add('foto-mode');
+            } else {
+                mainBtn.classList.remove('foto-mode');
+            }
+        }
+
+        // --- GATILHO DO BOTÃO CENTRAL ---
+        function handleCaptureAction() {
+            if (currentMode === 'video') {
+                toggleRecording();
+            } else {
+                takePhoto();
             }
         }
 
@@ -191,8 +266,6 @@
                 
                 if (!resposta.ok) return false;
 
-                // PROTEÇÃO EXTRA: Confere se o arquivo retornado é de fato uma imagem
-                // Se o servidor retornar uma página HTML de erro (falso 200), isso bloqueia a entrada
                 const contentType = resposta.headers.get('content-type');
                 if (contentType && !contentType.includes('image')) {
                     return false; 
@@ -260,6 +333,7 @@
             document.getElementById('login-screen').style.display='none';
             document.getElementById('app-container').style.display='block';
             initCamera();
+            setCaptureMode('video');
             setTimeout(updateCachedRects, 1000);
         }
 
@@ -442,7 +516,74 @@
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- DISPARADOR DE GRAVAÇÃO ---
+        // --- ENGINE DE CAPTURA DE FOTO ---
+        function takePhoto() {
+            if (isRecording) return;
+            
+            updateCachedRects();
+
+            // Ativa o Efeito Flash
+            const flash = document.getElementById('flash-overlay');
+            flash.classList.add('flash-active');
+            setTimeout(() => flash.classList.remove('flash-active'), 60);
+
+            // Cria um Canvas de alta definição temporário para a foto
+            const photoCanvas = document.createElement('canvas');
+            const pCtx = photoCanvas.getContext('2d');
+            
+            photoCanvas.width = 1080;
+            photoCanvas.height = 1920;
+
+            pCtx.imageSmoothingEnabled = true;
+            pCtx.imageSmoothingQuality = 'high';
+
+            // 1. Desenha a imagem de fundo da Câmera
+            pCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+
+            // 2. Mescla a logomarca no local exato com a rotação 3D atual
+            if (wrapper.style.display !== 'none' && logoRender.getAttribute('src')) {
+                pCtx.save();
+
+                const videoRect = cachedVideoRect;
+                const logoRect = cachedLogoRect;
+
+                const scaleXFactor = photoCanvas.width / videoRect.width;
+                const scaleYFactor = photoCanvas.height / videoRect.height;
+
+                const logoCenterX = logoRect.left + logoRect.width / 2;
+                const logoCenterY = logoRect.top + logoRect.height / 2;
+
+                const canvasLogoX = (logoCenterX - videoRect.left) * scaleXFactor;
+                const canvasLogoY = (logoCenterY - videoRect.top) * scaleYFactor;
+
+                const canvasLogoW = logoRect.width * scaleXFactor;
+                const canvasLogoH = logoRect.height * scaleYFactor;
+
+                pCtx.translate(canvasLogoX, canvasLogoY);
+                
+                let scaleX = Math.abs(Math.sin(counter));
+                pCtx.scale(scaleX, 1);
+                
+                pCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
+                pCtx.restore();
+            }
+
+            // Exporta e faz download imediato da imagem
+            try {
+                const fileUrl = photoCanvas.toDataURL('image/jpeg', 0.95);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = fileUrl;
+                downloadLink.download = `logocam_foto_${Date.now()}.jpg`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            } catch (err) {
+                console.error("Erro ao salvar foto:", err);
+            }
+        }
+
+
+        // --- DISPARADOR DE GRAVAÇÃO (VÍDEO) ---
         function toggleRecording() {
             if (!isRecording) {
                 startRecording();
@@ -484,8 +625,6 @@
             }
 
             recordCtx.imageSmoothingEnabled = false;
-            recordCtx.mozImageSmoothingEnabled = false;
-            recordCtx.webkitImageSmoothingEnabled = false;
 
             isRecording = true;
             recordingStream = recordingCanvas.captureStream(); 
