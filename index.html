@@ -181,8 +181,8 @@
             }
         }
 
-        // --- GERENCIAMENTO DE LOGOS E ACESSO ---
-        function verificarLoginSalvo() {
+        // --- GERENCIAMENTO DE LOGOS E ACESSO (VERIFICAÇÃO VIA REQUISIÇÃO HEAD) ---
+        async function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
 
@@ -192,40 +192,54 @@
 
                 if (!expirou) {
                     const logoUrl = `logos/${senhaSalva}.png`;
-                    const imgTest = new Image();
-                    imgTest.onload = function() {
+                    
+                    try {
+                        // Verifica no servidor usando HEAD para não rebaixar o arquivo sem necessidade
+                        const checagem = await fetch(logoUrl, { method: 'HEAD', cache: 'no-cache' });
+                        
+                        if (checagem.ok) { 
+                            // Arquivo validado com sucesso no servidor, libera acesso usando a cópia em cache
+                            setupLogoFromUrl(logoUrl);
+                            liberarAcesso();
+                        } else { 
+                            // Logomarca deletada do servidor (404), bloqueia o usuário imediatamente
+                            limparCredenciais();
+                        }
+                    } catch (erro) {
+                        // Se o cliente estiver sem conexão alguma, permite a entrada paliativa usando cache local
                         setupLogoFromUrl(logoUrl);
                         liberarAcesso();
-                    };
-                    imgTest.onerror = function() {
-                        limparCredenciais();
-                    };
-                    imgTest.src = logoUrl;
+                    }
                     return;
                 }
                 limparCredenciais();
             }
         }
 
-        function login() {
+        async function login() {
             const logoName = document.getElementById('pass').value.trim().toLowerCase();
             if(!logoName) return;
 
             document.getElementById('err').style.display = 'none';
             const logoUrl = `logos/${logoName}.png`;
 
-            const imgTest = new Image();
-            imgTest.onload = function() {
-                localStorage.setItem('app_senha', logoName);
-                localStorage.setItem('app_data_login', Date.now());
-                setupLogoFromUrl(logoUrl);
-                liberarAcesso();
-            };
-            imgTest.onerror = function() {
-                document.getElementById('err').innerText = "Código de logomarca inválido ou expirado!";
+            try {
+                // Checa a existência real do arquivo na hospedagem antes de salvar credenciais
+                const checagem = await fetch(logoUrl, { method: 'HEAD', cache: 'no-cache' });
+                
+                if (checagem.ok) {
+                    localStorage.setItem('app_senha', logoName);
+                    localStorage.setItem('app_data_login', Date.now());
+                    setupLogoFromUrl(logoUrl);
+                    liberarAcesso();
+                } else {
+                    document.getElementById('err').innerText = "Código de logomarca inválido ou expirado!";
+                    document.getElementById('err').style.display = 'block';
+                }
+            } catch (erro) {
+                document.getElementById('err').innerText = "Erro de conexão! Verifique sua internet.";
                 document.getElementById('err').style.display = 'block';
-            };
-            imgTest.src = logoUrl;
+            }
         }
 
         function setupLogoFromUrl(url) {
@@ -448,7 +462,7 @@
             const isAndroid = /Android/i.test(ua);
             const isOldAndroid = /Android\s([5-9]\.)/i.test(ua); 
 
-            let videoBitrate = 1200000; // Otimizado levemente para aliviar barramento de dados
+            let videoBitrate = 1200000; 
 
             if (isAndroid) {
                 if (isOldAndroid) {
@@ -464,15 +478,11 @@
                 recordingCanvas.height = 1280;
             }
 
-            // Desativa suavizações de forma estática antes de gravar
             recordCtx.imageSmoothingEnabled = false;
             recordCtx.mozImageSmoothingEnabled = false;
             recordCtx.webkitImageSmoothingEnabled = false;
 
-            // Ativa o sinalizador para o loop unificado começar a desenhar no canvas secundário
             isRecording = true;
-            
-            // Captura o stream do canvas de forma nativa e sem travas de relógio em conflito
             recordingStream = recordingCanvas.captureStream(); 
 
             let combinedStream;
@@ -487,7 +497,6 @@
 
             let options = {};
             if (isAndroid) {
-                // SELEÇÃO DE CODECS COM FOCO EM ACELERAÇÃO POR HARDWARE GRÁFICO (H264)
                 if (MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
                     options = { mimeType: 'video/webm;codecs=h264,opus', videoBitsPerSecond: videoBitrate };
                 } else if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
