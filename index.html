@@ -50,7 +50,7 @@
         #app-container { display: none; width: 100%; height: 100%; position: relative; }
         video#preview { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; z-index: 1; }
 
-        /* BARRA SUPERIOR MODERNA COM ÍCONES AMPLIADOS */
+        /* BARRA SUPERIOR */
         .top-bar { 
             position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
             display: flex; gap: 16px; z-index: 10; padding: 10px 20px;
@@ -70,7 +70,7 @@
         .btn-clean { color: #f87171; }
         .btn-back { color: #67e8f9; }
 
-        /* CONTROLES DE VELOCIDADE E GRAVAÇÃO INFERIORES */
+        /* CONTROLES INFERIORES */
         .bottom-bar {
             position: absolute; bottom: 50px; width: 100%;
             display: flex; justify-content: space-between; align-items: center;
@@ -83,7 +83,7 @@
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* BOTÃO DE GRAVAR MODERNO */
+        /* BOTÃO DE GRAVAR */
         #record-btn {
             width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
             cursor: pointer; display: flex; align-items: center; justify-content: center; 
@@ -91,7 +91,7 @@
         }
         #record-btn-inner { width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s; }
 
-        /* LOGOMARCA INTERATIVA COM ACELERAÇÃO DE HARDWARE FIXADA */
+        /* LOGOMARCA INTERATIVA */
         #logo-wrapper {
             position: absolute; top: 35%; left: 25%; z-index: 5;
             touch-action: none; display: none;
@@ -164,7 +164,6 @@
     </div>
 
     <script>
-        // --- CONSTANTES DE CONFIGURAÇÃO DE DESEMPENHO ---
         const TARGET_FPS = 24;
         const FPS_INTERVAL = 1000 / TARGET_FPS; 
 
@@ -181,7 +180,22 @@
             }
         }
 
-        // --- GERENCIAMENTO DE LOGOS E ACESSO CORRIGIDO PARA IOS ---
+        // --- SISTEMA DE CHECAGEM ANTI-CACHE COMPATÍVEL COM IOS ---
+        function verificarExistenciaNoServidor(nomeLogo) {
+            return new Promise((resolve) => {
+                const imgTeste = new Image();
+                // O timestamp (?t=...) força o iOS a fazer uma requisição real ao servidor ignorando a cache local
+                imgTeste.src = `logos/${nomeLogo}.png?t=${Date.now()}`;
+                
+                imgTeste.onload = () => {
+                    resolve(true); // Ficheiro existe no servidor
+                };
+                imgTeste.onerror = () => {
+                    resolve(false); // Ficheiro não existe (404) ou foi apagado
+                };
+            });
+        }
+
         async function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -191,28 +205,21 @@
                 const expirou = (Date.now() - parseInt(dataLogin)) > umMesEmMilissegundos;
 
                 if (!expirou) {
-                    const logoUrl = `logos/${senhaSalva}.png`;
+                    // Força a validação no servidor
+                    const existe NoServidor = await verificarExistenciaNoServidor(senhaSalva);
                     
-                    try {
-                        // CORREÇÃO IOS: O timestamp (?t=...) no fetch força o WebKit/Safari a consultar a internet em tempo real[cite: 3]
-                        const checagem = await fetch(`${logoUrl}?t=${Date.now()}`, { method: 'HEAD', cache: 'no-store' });
-                        
-                        if (checagem.ok) { 
-                            // Se existir no servidor, abre o app puxando o arquivo do cache local (Economiza dados)[cite: 3]
-                            setupLogoFromUrl(logoUrl);
-                            liberarAcesso();
-                        } else { 
-                            // Se foi deletado do servidor (404), desloga e bloqueia o espertinho na hora![cite: 3]
-                            limparCredenciais();
-                        }
-                    } catch (erro) {
-                        // Caso falte internet total no celular, permite entrada paliativa offline via cache local
+                    if (existeNoServidor) {
+                        // Se existe, injeta a imagem com o cache-buster ativo para atualizar no visor do iOS
+                        const logoUrl = `logos/${senhaSalva}.png?t=${Date.now()}`;
                         setupLogoFromUrl(logoUrl);
                         liberarAcesso();
+                    } else {
+                        // Se a logo foi apagada, limpa as credenciais locais e bloqueia o ecrã na hora!
+                        voltarAoInicio();
                     }
                     return;
                 }
-                limparCredenciais();
+                voltarAoInicio();
             }
         }
 
@@ -221,24 +228,20 @@
             if(!logoName) return;
 
             document.getElementById('err').style.display = 'none';
-            const logoUrl = `logos/${logoName}.png`;
 
-            try {
-                // CORREÇÃO IOS: Força a validação na internet em tempo real ao digitar o código[cite: 3]
-                const checagem = await fetch(`${logoUrl}?t=${Date.now()}`, { method: 'HEAD', cache: 'no-store' });
-                
-                if (checagem.ok) {
-                    localStorage.setItem('app_senha', logoName);
-                    localStorage.setItem('app_data_login', Date.now());
-                    setupLogoFromUrl(logoUrl);
-                    liberarAcesso();
-                } else {
-                    document.getElementById('err').innerText = "Código de logomarca inválido ou expirado!";
-                    document.getElementById('err').style.display = 'block';
-                }
-            } catch (erro) {
-                document.getElementById('err').innerText = "Erro de conexão! Verifique sua internet.";
+            // Validação em tempo real ao digitar
+            const existeNoServidor = await verificarExistenciaNoServidor(logoName);
+            
+            if (existeNoServidor) {
+                localStorage.setItem('app_senha', logoName);
+                localStorage.setItem('app_data_login', Date.now());
+                const logoUrl = `logos/${logoName}.png?t=${Date.now()}`;
+                setupLogoFromUrl(logoUrl);
+                liberarAcesso();
+            } else {
+                document.getElementById('err').innerText = "Código de logomarca inválido ou expirado!";
                 document.getElementById('err').style.display = 'block';
+                limparCredenciais();
             }
         }
 
@@ -269,7 +272,7 @@
                 recordingStream = null;
             }
 
-            // Garante a limpeza total do elemento da imagem para o iOS descarregar a logo antiga da tela
+            // Força a remoção do atributo para o motor WebKit apagar a imagem da memória de exibição
             logoRender.removeAttribute('src');
             wrapper.style.display = 'none';
             
@@ -515,13 +518,13 @@
             try {
                 mediaRecorder = new MediaRecorder(combinedStream, options);
             } catch (err) {
-                console.warn("Falha com codecs dedicados, a acionar modo genérico...", err);
+                console.warn("Falha com codecs dedicados, modo genérico ativo...", err);
                 try {
                     mediaRecorder = new MediaRecorder(combinedStream);
                 } catch(finalErr) {
                     resetRecordButton();
                     isRecording = false;
-                    alert("Erro: O seu navegador não suporta gravação de vídeo.");
+                    alert("Erro: O navegador não suporta gravação de vídeo.");
                     return;
                 }
             }
