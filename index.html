@@ -13,7 +13,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link class="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest">
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -70,7 +70,7 @@
         .btn-clean { color: #f87171; }
         .btn-back { color: #67e8f9; }
 
-        /* CONTROLES INFERIORES REORGANIZADOS */
+        /* CONTROLES INFERIORES */
         .bottom-bar {
             position: absolute; bottom: 45px; width: 100%;
             display: flex; justify-content: space-between; align-items: center;
@@ -123,7 +123,6 @@
         }
         #record-btn-inner { width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s; }
 
-        /* Estilo do botão em modo FOTO */
         #record-btn.foto-mode {
             background: #ffffff;
             box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
@@ -218,7 +217,7 @@
 
         let cachedVideoRect = { left: 0, top: 0, width: 100, height: 100 };
         let cachedLogoRect = { left: 0, top: 0, width: 100, height: 100 };
-        let currentMode = 'video'; // 'video' ou 'foto'
+        let currentMode = 'video';
 
         function updateCachedRects() {
             if (video && logoRender && wrapper.style.display !== 'none') {
@@ -230,9 +229,8 @@
             }
         }
 
-        // --- MUDANÇA DE MODO (FOTO / VÍDEO) ---
         function setCaptureMode(mode) {
-            if (isRecording) return; // Impede mudar de modo gravando vídeo
+            if (isRecording) return;
             currentMode = mode;
             
             document.getElementById('mode-video').classList.toggle('active', mode === 'video');
@@ -246,7 +244,6 @@
             }
         }
 
-        // --- GATILHO DO BOTÃO CENTRAL ---
         function handleCaptureAction() {
             if (currentMode === 'video') {
                 toggleRecording();
@@ -255,7 +252,21 @@
             }
         }
 
-        // --- VALIDAÇÃO REFORÇADA ANTI-FALSO-POSITIVO ---
+        // --- SISTEMA AUTO-RECUPERAR FLUXO DA CÂMERA ---
+        function recuperarCamera() {
+            setTimeout(() => {
+                if (video) {
+                    // Tenta dar o play direto para evitar lentidão
+                    video.play().then(() => {
+                        // Se o hardware do sistema resetou completamente, força o re-init do stream
+                        initCamera();
+                    }).catch(() => {
+                        initCamera();
+                    });
+                }
+            }, 350); // Delay cirúrgico para esperar o encerramento do download do sistema
+        }
+
         async function verificarExistenciaNoServidor(nomeLogo) {
             try {
                 const resposta = await fetch(`logos/${nomeLogo}.png?t=${Date.now()}`, {
@@ -407,7 +418,7 @@
             setTimeout(updateCachedRects, 1000);
         }
 
-        // --- MOTOR DE ANIMAÇÃO E GRAVAÇÃO UNIFICADO ---
+        // --- MOTOR DE ANIMAÇÃO ---
         const wrapper = document.getElementById('logo-wrapper');
         const containerInner = document.getElementById('logo-container-inner');
         const logoRender = document.getElementById('logo-img');
@@ -522,12 +533,10 @@
             
             updateCachedRects();
 
-            // Ativa o Efeito Flash
             const flash = document.getElementById('flash-overlay');
             flash.classList.add('flash-active');
             setTimeout(() => flash.classList.remove('flash-active'), 60);
 
-            // Cria um Canvas de alta definição temporário para a foto
             const photoCanvas = document.createElement('canvas');
             const pCtx = photoCanvas.getContext('2d');
             
@@ -537,10 +546,8 @@
             pCtx.imageSmoothingEnabled = true;
             pCtx.imageSmoothingQuality = 'high';
 
-            // 1. Desenha a imagem de fundo da Câmera
             pCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
 
-            // 2. Mescla a logomarca no local exato com a rotação 3D atual
             if (wrapper.style.display !== 'none' && logoRender.getAttribute('src')) {
                 pCtx.save();
 
@@ -568,7 +575,6 @@
                 pCtx.restore();
             }
 
-            // Exporta e faz download imediato da imagem
             try {
                 const fileUrl = photoCanvas.toDataURL('image/jpeg', 0.95);
                 const downloadLink = document.createElement('a');
@@ -577,6 +583,9 @@
                 document.body.appendChild(downloadLink);
                 downloadLink.click();
                 document.body.removeChild(downloadLink);
+                
+                // Força o fluxo da câmera a re-estabelecer
+                recuperarCamera();
             } catch (err) {
                 console.error("Erro ao salvar foto:", err);
             }
@@ -703,6 +712,9 @@
                 if (recordingStream) {
                     recordingStream.getTracks().forEach(track => track.stop());
                 }
+
+                // Força o fluxo da câmera a re-estabelecer
+                recuperarCamera();
             };
 
             mediaRecorder.start();
