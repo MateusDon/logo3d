@@ -150,18 +150,24 @@
 
         .hidden-ui { opacity: 0 !important; pointer-events: none !important; }
 
-        /* TELA DE PRÉ-VISUALIZAÇÃO (CORREÇÃO PARA IOS) */
+        /* TELA DE PRÉ-VISUALIZAÇÃO PREMIUM */
         #preview-modal {
             position: fixed; inset: 0; background: #000; z-index: 20000;
             display: none; flex-direction: column; align-items: center; justify-content: center;
         }
         #preview-modal img, #preview-modal video {
-            width: 100%; height: 100%; object-fit: contain; max-height: calc(100% - 120px);
+            width: 100%; height: 100%; object-fit: contain; max-height: calc(100% - 140px);
             background: #000;
         }
-        .preview-buttons {
-            position: absolute; bottom: 40px; display: flex; gap: 16px; width: 100%; padding: 0 32px; justify-content: center;
+        /* Dica nativa iOS */
+        .ios-tip {
+            color: rgba(255, 255, 255, 0.5); font-size: 11px; margin-top: 5px; text-align: center;
+            letter-spacing: 0.5px; display: none; pointer-events: none;
         }
+        .preview-buttons {
+            position: absolute; bottom: 40px; display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 0 32px; align-items: center;
+        }
+        .btn-row { display: flex; gap: 16px; width: 100%; justify-content: center; max-width: 450px; }
         .preview-btn {
             padding: 16px 28px; border: none; border-radius: 30px; font-weight: bold; font-size: 15px; 
             cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 16px rgba(0,0,0,0.4);
@@ -181,8 +187,11 @@
         <img id="preview-modal-img" style="display:none;" alt="Prévia da Foto">
         <video id="preview-modal-video" style="display:none;" autoplay loop playsinline controls></video>
         <div class="preview-buttons">
-            <button class="preview-btn close-btn" onclick="fecharPreview()"><i class="fa-solid fa-xmark"></i> VOLTAR</button>
-            <button class="preview-btn download-btn" onclick="baixarCaptura()"><i class="fa-solid fa-cloud-arrow-down"></i> SALVAR</button>
+            <div class="btn-row">
+                <button class="preview-btn close-btn" onclick="fecharPreview()"><i class="fa-solid fa-xmark"></i> VOLTAR</button>
+                <button class="preview-btn download-btn" onclick="baixarCaptura()"><i class="fa-solid fa-cloud-arrow-down"></i> SALVAR</button>
+            </div>
+            <p id="ios-hint" class="ios-tip">💡 Dica: Você também pode segurar o dedo na foto para salvar direto.</p>
         </div>
     </div>
 
@@ -250,7 +259,6 @@
         let cachedLogoRect = { left: 0, top: 0, width: 100, height: 100 };
         let currentMode = 'video';
         
-        // Elementos globais de download
         let urlParaBaixar = "";
         let nomeArquivoParaBaixar = "";
 
@@ -287,22 +295,25 @@
             }
         }
 
-        // --- SISTEMA DE DOWNLOAD E RE-AUTORIZAÇÃO DO IOS ---
+        // --- SISTEMA DE DOWNLOAD E VISUALIZAÇÃO ---
         function abrirPreview(url, nome, tipo) {
             urlParaBaixar = url;
             nomeArquivoParaBaixar = nome;
 
             const imgModal = document.getElementById('preview-modal-img');
             const videoModal = document.getElementById('preview-modal-video');
+            const iosHint = document.getElementById('ios-hint');
 
             if (tipo === 'foto') {
                 imgModal.src = url;
                 imgModal.style.display = 'block';
                 videoModal.style.display = 'none';
+                iosHint.style.display = 'block'; // Mostra dica de toque longo apenas para fotos
             } else {
                 videoModal.src = url;
                 videoModal.style.display = 'block';
                 imgModal.style.display = 'none';
+                iosHint.style.display = 'none';
                 videoModal.play();
             }
 
@@ -331,8 +342,20 @@
             urlParaBaixar = "";
             nomeArquivoParaBaixar = "";
 
-            // O SEGREDO DO IOS: Como o fecharPreview roda sob um clique físico, 
-            // a chamada initCamera() recupera a permissão na hora e nunca mais fica preta!
+            // O GRANDE SEGREDO PARA RE-ATIVAR NO IOS SEM PERDER PERMISSÃO:
+            // Em vez de recriar o fluxo do zero, checamos se o stream anterior ainda está ativo.
+            // Se as tracks estiverem vivas, apenas damos play no elemento de vídeo.
+            if (stream && stream.active) {
+                const tracksVivas = stream.getTracks().every(track => track.readyState === 'live');
+                if (tracksVivas) {
+                    video.play().catch(() => {
+                        initCamera(); // Se o iOS travou severamente, força reinício completo
+                    });
+                    return;
+                }
+            }
+            
+            // Caso tenha morrido de fato por inatividade, reconecta do zero
             initCamera();
         }
 
@@ -343,17 +366,11 @@
                     cache: 'no-store',
                     headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
                 });
-                
                 if (!resposta.ok) return false;
-
                 const contentType = resposta.headers.get('content-type');
-                if (contentType && !contentType.includes('image')) {
-                    return false; 
-                }
-
+                if (contentType && !contentType.includes('image')) return false; 
                 return true; 
             } catch (erro) {
-                console.error("Erro na validação:", erro);
                 return false; 
             }
         }
@@ -368,7 +385,6 @@
 
                 if (!expirou) {
                     const existeNoServidor = await verificarExistenciaNoServidor(senhaSalva);
-                    
                     if (existeNoServidor) {
                         const logoUrl = `logos/${senhaSalva}.png?t=${Date.now()}`;
                         setupLogoFromUrl(logoUrl);
@@ -387,7 +403,6 @@
             if(!logoName) return;
 
             document.getElementById('err').style.display = 'none';
-
             const existeNoServidor = await verificarExistenciaNoServidor(logoName);
             
             if (existeNoServidor) {
@@ -425,7 +440,6 @@
                 stream.getTracks().forEach(t => t.stop());
                 stream = null;
             }
-
             if (recordingStream) {
                 recordingStream.getTracks().forEach(track => track.stop());
                 recordingStream = null;
@@ -452,7 +466,6 @@
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(updateCachedRects, 150);
         });
-
 
         // --- CONTROLE DA CÂMERA ---
         let stream;
@@ -506,10 +519,8 @@
 
         function animateLoop(timestamp) {
             requestAnimationFrame(animateLoop);
-            
             if (!timestamp) timestamp = performance.now();
             const elapsed = timestamp - lastAnimTime;
-            
             if (elapsed < FPS_INTERVAL) return;
             lastAnimTime = timestamp - (elapsed % FPS_INTERVAL);
 
@@ -521,10 +532,8 @@
 
             if (isRecording) {
                 recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
-
                 if (wrapper.style.display !== 'none' && logoRender.getAttribute('src')) {
                     recordCtx.save();
-
                     const videoRect = cachedVideoRect;
                     const logoRect = cachedLogoRect;
 
@@ -541,10 +550,8 @@
                     const canvasLogoH = logoRect.height * scaleYFactor;
 
                     recordCtx.translate(canvasLogoX, canvasLogoY);
-                    
                     let scaleX = Math.abs(Math.sin(counter));
                     recordCtx.scale(scaleX, 1);
-                    
                     recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                     recordCtx.restore();
                 }
@@ -595,11 +602,9 @@
         function hideControls() { uiTop.classList.add('hidden-ui'); uiBottom.classList.add('hidden-ui'); }
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
-
         // --- ENGINE DE CAPTURA DE FOTO ---
         function takePhoto() {
             if (isRecording) return;
-            
             updateCachedRects();
 
             const flash = document.getElementById('flash-overlay');
@@ -608,18 +613,15 @@
 
             const photoCanvas = document.createElement('canvas');
             const pCtx = photoCanvas.getContext('2d');
-            
             photoCanvas.width = 1080;
             photoCanvas.height = 1920;
 
             pCtx.imageSmoothingEnabled = true;
             pCtx.imageSmoothingQuality = 'high';
-
             pCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
 
             if (wrapper.style.display !== 'none' && logoRender.getAttribute('src')) {
                 pCtx.save();
-
                 const videoRect = cachedVideoRect;
                 const logoRect = cachedLogoRect;
 
@@ -636,10 +638,8 @@
                 const canvasLogoH = logoRect.height * scaleYFactor;
 
                 pCtx.translate(canvasLogoX, canvasLogoY);
-                
                 let scaleX = Math.abs(Math.sin(counter));
                 pCtx.scale(scaleX, 1);
-                
                 pCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                 pCtx.restore();
             }
@@ -647,14 +647,11 @@
             try {
                 const fileUrl = photoCanvas.toDataURL('image/jpeg', 0.95);
                 const nomeFoto = `logocam_foto_${Date.now()}.jpg`;
-                
-                // Abre a tela cheia de visualização estável do iOS
                 abrirPreview(fileUrl, nomeFoto, 'foto');
             } catch (err) {
-                console.error("Erro ao gerar foto:", err);
+                console.error(err);
             }
         }
-
 
         // --- DISPARADOR DE GRAVAÇÃO (VÍDEO) ---
         function toggleRecording() {
@@ -667,7 +664,6 @@
 
         async function startRecording() {
             if (isRecording) return;
-            
             updateCachedRects();
 
             const btnInner = document.getElementById('record-btn-inner');
@@ -676,27 +672,12 @@
             document.getElementById('record-btn').style.background = '#dc2626';
 
             recordedChunks = [];
-            
             const ua = navigator.userAgent;
             const isAndroid = /Android/i.test(ua);
-            const isOldAndroid = /Android\s([5-9]\.)/i.test(ua); 
-
             let videoBitrate = 1200000; 
 
-            if (isAndroid) {
-                if (isOldAndroid) {
-                    recordingCanvas.width = 540;   
-                    recordingCanvas.height = 960;
-                    videoBitrate = 800000; 
-                } else {
-                    recordingCanvas.width = 720;   
-                    recordingCanvas.height = 1280;
-                }
-            } else {
-                recordingCanvas.width = 720;
-                recordingCanvas.height = 1280;
-            }
-
+            recordingCanvas.width = 720;
+            recordingCanvas.height = 1280;
             recordCtx.imageSmoothingEnabled = false;
 
             isRecording = true;
@@ -714,15 +695,7 @@
 
             let options = {};
             if (isAndroid) {
-                if (MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
-                    options = { mimeType: 'video/webm;codecs=h264,opus', videoBitsPerSecond: videoBitrate };
-                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
-                    options = { mimeType: 'video/webm;codecs=h264', videoBitsPerSecond: videoBitrate };
-                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBitrate };
-                } else {
-                    options = { mimeType: 'video/webm', videoBitsPerSecond: videoBitrate };
-                }
+                options = { mimeType: 'video/webm;codecs=h264', videoBitsPerSecond: videoBitrate };
             } else {
                 if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
                     options = { mimeType: 'video/mp4;codecs=avc1', audioBitsPerSecond: 64000 };
@@ -734,37 +707,30 @@
             try {
                 mediaRecorder = new MediaRecorder(combinedStream, options);
             } catch (err) {
-                console.warn("Falha com codecs dedicados, modo genérico ativo...", err);
                 try {
                     mediaRecorder = new MediaRecorder(combinedStream);
                 } catch(finalErr) {
                     resetRecordButton();
                     isRecording = false;
-                    alert("Erro: O navegador não suporta gravação de vídeo.");
+                    alert("Erro: Navegador incompatível com gravação.");
                     return;
                 }
             }
 
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) {
-                    recordedChunks.push(e.data);
-                }
+                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
             };
 
             mediaRecorder.onstop = () => {
                 if (recordedChunks.length === 0) return;
-
                 const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
                 const fileUrl = URL.createObjectURL(blob);
-
                 const ext = (mediaRecorder.mimeType && mediaRecorder.mimeType.includes('mp4')) ? 'mp4' : 'webm';
                 const nomeVideo = `logocam_pro_${Date.now()}.${ext}`;
 
                 if (recordingStream) {
                     recordingStream.getTracks().forEach(track => track.stop());
                 }
-
-                // Abre a prévia do vídeo direto no iOS
                 abrirPreview(fileUrl, nomeVideo, 'video');
             };
 
@@ -774,12 +740,8 @@
         function stopRecording() {
             if (!isRecording) return;
             isRecording = false;
-
             resetRecordButton();
-
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
         }
 
         function resetRecordButton() {
