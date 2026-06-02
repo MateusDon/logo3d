@@ -180,16 +180,25 @@
             }
         }
 
-        // --- VALIDAÇÃO REAL ANTI-CACHE (DÁ O CONTROLE ABSOLUTO A VOCÊ) ---
+        // --- VALIDAÇÃO REFORÇADA ANTI-FALSO-POSITIVO ---
         async function verificarExistenciaNoServidor(nomeLogo) {
             try {
-                // O timestamp (?t=...) + cache: 'no-store' força o iOS a ir ao servidor checar em tempo real
                 const resposta = await fetch(`logos/${nomeLogo}.png?t=${Date.now()}`, {
                     method: 'GET',
                     cache: 'no-store',
                     headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
                 });
-                return resposta.ok; // Retorna true se a logo existir (200), false se foi apagada (404)
+                
+                if (!resposta.ok) return false;
+
+                // PROTEÇÃO EXTRA: Confere se o arquivo retornado é de fato uma imagem
+                // Se o servidor retornar uma página HTML de erro (falso 200), isso bloqueia a entrada
+                const contentType = resposta.headers.get('content-type');
+                if (contentType && !contentType.includes('image')) {
+                    return false; 
+                }
+
+                return true; 
             } catch (erro) {
                 console.error("Erro na validação:", erro);
                 return false; 
@@ -205,16 +214,13 @@
                 const expirou = (Date.now() - parseInt(dataLogin)) > umMesEmMilissegundos;
 
                 if (!expirou) {
-                    // Executa a checagem no servidor de forma obrigatória
                     const existeNoServidor = await verificarExistenciaNoServidor(senhaSalva);
                     
                     if (existeNoServidor) {
-                        // Se existe no servidor, carrega aplicando o cache-buster para atualizar a imagem na tela
                         const logoUrl = `logos/${senhaSalva}.png?t=${Date.now()}`;
                         setupLogoFromUrl(logoUrl);
                         liberarAcesso();
                     } else {
-                        // Se você apagou do servidor, limpa o celular dele e chuta ele de volta pra tela de login
                         voltarAoInicio();
                     }
                     return;
@@ -271,7 +277,6 @@
                 recordingStream = null;
             }
 
-            // Remove a imagem por completo para limpar a memória gráfica do iOS
             logoRender.removeAttribute('src');
             wrapper.style.display = 'none';
             
