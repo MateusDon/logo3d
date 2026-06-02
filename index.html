@@ -13,7 +13,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <link class="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest">
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -72,7 +72,7 @@
 
         /* CONTROLES INFERIORES */
         .bottom-bar {
-            position: absolute; bottom: 50px; width: 100%;
+            position: absolute; bottom: 45px; width: 100%;
             display: flex; justify-content: space-between; align-items: center;
             padding: 0 40px; z-index: 10; transition: opacity 0.3s ease;
         }
@@ -83,13 +83,54 @@
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
 
-        /* BOTÃO DE GRAVAR */
+        /* CENTRALIZADOR DO BOTÃO E SELETOR */
+        .control-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        /* SELETOR DE MODO DISCRETO */
+        .mode-selector {
+            display: flex;
+            gap: 16px;
+            background: rgba(0, 0, 0, 0.45);
+            padding: 5px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .mode-item {
+            font-size: 11px;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+        }
+        .mode-item.active {
+            color: #ffffff;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+        }
+
+        /* BOTÃO DE CAPTURA DINÂMICO */
         #record-btn {
             width: 76px; height: 76px; background: #ef4444; border: 5px solid white; border-radius: 50%; 
             cursor: pointer; display: flex; align-items: center; justify-content: center; 
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); transition: all 0.3s ease; outline: none;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); transition: all 0.3s ease; outline: none;
         }
         #record-btn-inner { width: 24px; height: 24px; background: white; border-radius: 50%; transition: all 0.2s; }
+
+        #record-btn.foto-mode {
+            background: #ffffff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+        #record-btn.foto-mode #record-btn-inner {
+            background: #1e293b;
+            scale: 0.9;
+        }
 
         /* LOGOMARCA INTERATIVA */
         #logo-wrapper {
@@ -97,22 +138,62 @@
             touch-action: none; display: none;
             will-change: transform;
         }
-        
-        #logo-container-inner {
-            position: relative;
-            width: 160px;
-            will-change: transform;
+        #logo-container-inner { position: relative; width: 160px; will-change: transform; }
+        #logo-img { width: 100%; display: block; }
+
+        /* FLASH DA CÂMERA */
+        #flash-overlay {
+            position: fixed; inset: 0; background: white; opacity: 0; pointer-events: none; z-index: 99999;
+            transition: opacity 0.15s ease-out;
         }
-        
-        #logo-img {
-            width: 100%;
-            display: block;
-        }
+        #flash-overlay.flash-active { opacity: 1; transition: none; }
 
         .hidden-ui { opacity: 0 !important; pointer-events: none !important; }
+
+        /* TELA DE PRÉ-VISUALIZAÇÃO PREMIUM */
+        #preview-modal {
+            position: fixed; inset: 0; background: #000; z-index: 20000;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #preview-modal img, #preview-modal video {
+            width: 100%; height: 100%; object-fit: contain; max-height: calc(100% - 140px);
+            background: #000;
+        }
+        /* Dica nativa iOS */
+        .ios-tip {
+            color: rgba(255, 255, 255, 0.5); font-size: 11px; margin-top: 5px; text-align: center;
+            letter-spacing: 0.5px; display: none; pointer-events: none;
+        }
+        .preview-buttons {
+            position: absolute; bottom: 40px; display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 0 32px; align-items: center;
+        }
+        .btn-row { display: flex; gap: 16px; width: 100%; justify-content: center; max-width: 450px; }
+        .preview-btn {
+            padding: 16px 28px; border: none; border-radius: 30px; font-weight: bold; font-size: 15px; 
+            cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            transition: background 0.2s;
+        }
+        .download-btn { background: #6d28d9; color: white; flex: 1.3; justify-content: center; }
+        .download-btn:active { background: #5b21b6; }
+        .close-btn { background: rgba(255, 255, 255, 0.15); color: white; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); flex: 0.8; justify-content: center; border: 1px solid rgba(255,255,255,0.1); }
+        .close-btn:active { background: rgba(255, 255, 255, 0.3); }
     </style>
 </head>
 <body>
+
+    <div id="flash-overlay"></div>
+
+    <div id="preview-modal">
+        <img id="preview-modal-img" style="display:none;" alt="Prévia da Foto">
+        <video id="preview-modal-video" style="display:none;" autoplay loop playsinline controls></video>
+        <div class="preview-buttons">
+            <div class="btn-row">
+                <button class="preview-btn close-btn" onclick="fecharPreview()"><i class="fa-solid fa-xmark"></i> VOLTAR</button>
+                <button class="preview-btn download-btn" onclick="baixarCaptura()"><i class="fa-solid fa-cloud-arrow-down"></i> SALVAR</button>
+            </div>
+            <p id="ios-hint" class="ios-tip">💡 Dica: Você também pode segurar o dedo na foto para salvar direto.</p>
+        </div>
+    </div>
 
     <div id="login-screen">
         <div class="login-box">
@@ -155,9 +236,16 @@
         <div class="bottom-bar" id="ui-bottom">
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(-0.2);"><i class="fa-solid fa-minus"></i></button>
             
-            <button id="record-btn" onclick="event.stopPropagation(); toggleRecording();">
-                <div id="record-btn-inner"></div>
-            </button>
+            <div class="control-center">
+                <div class="mode-selector">
+                    <span id="mode-video" class="mode-item active" onclick="event.stopPropagation(); setCaptureMode('video');">VÍDEO</span>
+                    <span id="mode-foto" class="mode-item" onclick="event.stopPropagation(); setCaptureMode('foto');">FOTO</span>
+                </div>
+                
+                <button id="record-btn" onclick="event.stopPropagation(); handleCaptureAction();">
+                    <div id="record-btn-inner"></div>
+                </button>
+            </div>
             
             <button class="speed-btn" onclick="event.stopPropagation(); changeSpeed(0.2);"><i class="fa-solid fa-plus"></i></button>
         </div>
@@ -169,6 +257,10 @@
 
         let cachedVideoRect = { left: 0, top: 0, width: 100, height: 100 };
         let cachedLogoRect = { left: 0, top: 0, width: 100, height: 100 };
+        let currentMode = 'video';
+        
+        let urlParaBaixar = "";
+        let nomeArquivoParaBaixar = "";
 
         function updateCachedRects() {
             if (video && logoRender && wrapper.style.display !== 'none') {
@@ -180,7 +272,93 @@
             }
         }
 
-        // --- VALIDAÇÃO REFORÇADA ANTI-FALSO-POSITIVO ---
+        function setCaptureMode(mode) {
+            if (isRecording) return;
+            currentMode = mode;
+            
+            document.getElementById('mode-video').classList.toggle('active', mode === 'video');
+            document.getElementById('mode-foto').classList.toggle('active', mode === 'foto');
+            
+            const mainBtn = document.getElementById('record-btn');
+            if (mode === 'foto') {
+                mainBtn.classList.add('foto-mode');
+            } else {
+                mainBtn.classList.remove('foto-mode');
+            }
+        }
+
+        function handleCaptureAction() {
+            if (currentMode === 'video') {
+                toggleRecording();
+            } else {
+                takePhoto();
+            }
+        }
+
+        // --- SISTEMA DE DOWNLOAD E VISUALIZAÇÃO ---
+        function abrirPreview(url, nome, tipo) {
+            urlParaBaixar = url;
+            nomeArquivoParaBaixar = nome;
+
+            const imgModal = document.getElementById('preview-modal-img');
+            const videoModal = document.getElementById('preview-modal-video');
+            const iosHint = document.getElementById('ios-hint');
+
+            if (tipo === 'foto') {
+                imgModal.src = url;
+                imgModal.style.display = 'block';
+                videoModal.style.display = 'none';
+                iosHint.style.display = 'block'; // Mostra dica de toque longo apenas para fotos
+            } else {
+                videoModal.src = url;
+                videoModal.style.display = 'block';
+                imgModal.style.display = 'none';
+                iosHint.style.display = 'none';
+                videoModal.play();
+            }
+
+            document.getElementById('preview-modal').style.display = 'flex';
+        }
+
+        function baixarCaptura() {
+            if (!urlParaBaixar) return;
+            const downloadLink = document.createElement('a');
+            downloadLink.href = urlParaBaixar;
+            downloadLink.download = nomeArquivoParaBaixar;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
+        function fecharPreview() {
+            document.getElementById('preview-modal').style.display = 'none';
+            
+            const videoModal = document.getElementById('preview-modal-video');
+            videoModal.pause();
+            videoModal.removeAttribute('src');
+            videoModal.load();
+            document.getElementById('preview-modal-img').removeAttribute('src');
+            
+            urlParaBaixar = "";
+            nomeArquivoParaBaixar = "";
+
+            // O GRANDE SEGREDO PARA RE-ATIVAR NO IOS SEM PERDER PERMISSÃO:
+            // Em vez de recriar o fluxo do zero, checamos se o stream anterior ainda está ativo.
+            // Se as tracks estiverem vivas, apenas damos play no elemento de vídeo.
+            if (stream && stream.active) {
+                const tracksVivas = stream.getTracks().every(track => track.readyState === 'live');
+                if (tracksVivas) {
+                    video.play().catch(() => {
+                        initCamera(); // Se o iOS travou severamente, força reinício completo
+                    });
+                    return;
+                }
+            }
+            
+            // Caso tenha morrido de fato por inatividade, reconecta do zero
+            initCamera();
+        }
+
         async function verificarExistenciaNoServidor(nomeLogo) {
             try {
                 const resposta = await fetch(`logos/${nomeLogo}.png?t=${Date.now()}`, {
@@ -188,19 +366,11 @@
                     cache: 'no-store',
                     headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
                 });
-                
                 if (!resposta.ok) return false;
-
-                // PROTEÇÃO EXTRA: Confere se o arquivo retornado é de fato uma imagem
-                // Se o servidor retornar uma página HTML de erro (falso 200), isso bloqueia a entrada
                 const contentType = resposta.headers.get('content-type');
-                if (contentType && !contentType.includes('image')) {
-                    return false; 
-                }
-
+                if (contentType && !contentType.includes('image')) return false; 
                 return true; 
             } catch (erro) {
-                console.error("Erro na validação:", erro);
                 return false; 
             }
         }
@@ -215,7 +385,6 @@
 
                 if (!expirou) {
                     const existeNoServidor = await verificarExistenciaNoServidor(senhaSalva);
-                    
                     if (existeNoServidor) {
                         const logoUrl = `logos/${senhaSalva}.png?t=${Date.now()}`;
                         setupLogoFromUrl(logoUrl);
@@ -234,7 +403,6 @@
             if(!logoName) return;
 
             document.getElementById('err').style.display = 'none';
-
             const existeNoServidor = await verificarExistenciaNoServidor(logoName);
             
             if (existeNoServidor) {
@@ -260,6 +428,7 @@
             document.getElementById('login-screen').style.display='none';
             document.getElementById('app-container').style.display='block';
             initCamera();
+            setCaptureMode('video');
             setTimeout(updateCachedRects, 1000);
         }
 
@@ -271,7 +440,6 @@
                 stream.getTracks().forEach(t => t.stop());
                 stream = null;
             }
-
             if (recordingStream) {
                 recordingStream.getTracks().forEach(track => track.stop());
                 recordingStream = null;
@@ -298,7 +466,6 @@
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(updateCachedRects, 150);
         });
-
 
         // --- CONTROLE DA CÂMERA ---
         let stream;
@@ -333,7 +500,7 @@
             setTimeout(updateCachedRects, 1000);
         }
 
-        // --- MOTOR DE ANIMAÇÃO E GRAVAÇÃO UNIFICADO ---
+        // --- MOTOR DE ANIMAÇÃO ---
         const wrapper = document.getElementById('logo-wrapper');
         const containerInner = document.getElementById('logo-container-inner');
         const logoRender = document.getElementById('logo-img');
@@ -352,10 +519,8 @@
 
         function animateLoop(timestamp) {
             requestAnimationFrame(animateLoop);
-            
             if (!timestamp) timestamp = performance.now();
             const elapsed = timestamp - lastAnimTime;
-            
             if (elapsed < FPS_INTERVAL) return;
             lastAnimTime = timestamp - (elapsed % FPS_INTERVAL);
 
@@ -367,10 +532,8 @@
 
             if (isRecording) {
                 recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
-
                 if (wrapper.style.display !== 'none' && logoRender.getAttribute('src')) {
                     recordCtx.save();
-
                     const videoRect = cachedVideoRect;
                     const logoRect = cachedLogoRect;
 
@@ -387,10 +550,8 @@
                     const canvasLogoH = logoRect.height * scaleYFactor;
 
                     recordCtx.translate(canvasLogoX, canvasLogoY);
-                    
                     let scaleX = Math.abs(Math.sin(counter));
                     recordCtx.scale(scaleX, 1);
-                    
                     recordCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
                     recordCtx.restore();
                 }
@@ -441,8 +602,58 @@
         function hideControls() { uiTop.classList.add('hidden-ui'); uiBottom.classList.add('hidden-ui'); }
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
+        // --- ENGINE DE CAPTURA DE FOTO ---
+        function takePhoto() {
+            if (isRecording) return;
+            updateCachedRects();
 
-        // --- DISPARADOR DE GRAVAÇÃO ---
+            const flash = document.getElementById('flash-overlay');
+            flash.classList.add('flash-active');
+            setTimeout(() => flash.classList.remove('flash-active'), 60);
+
+            const photoCanvas = document.createElement('canvas');
+            const pCtx = photoCanvas.getContext('2d');
+            photoCanvas.width = 1080;
+            photoCanvas.height = 1920;
+
+            pCtx.imageSmoothingEnabled = true;
+            pCtx.imageSmoothingQuality = 'high';
+            pCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+
+            if (wrapper.style.display !== 'none' && logoRender.getAttribute('src')) {
+                pCtx.save();
+                const videoRect = cachedVideoRect;
+                const logoRect = cachedLogoRect;
+
+                const scaleXFactor = photoCanvas.width / videoRect.width;
+                const scaleYFactor = photoCanvas.height / videoRect.height;
+
+                const logoCenterX = logoRect.left + logoRect.width / 2;
+                const logoCenterY = logoRect.top + logoRect.height / 2;
+
+                const canvasLogoX = (logoCenterX - videoRect.left) * scaleXFactor;
+                const canvasLogoY = (logoCenterY - videoRect.top) * scaleYFactor;
+
+                const canvasLogoW = logoRect.width * scaleXFactor;
+                const canvasLogoH = logoRect.height * scaleYFactor;
+
+                pCtx.translate(canvasLogoX, canvasLogoY);
+                let scaleX = Math.abs(Math.sin(counter));
+                pCtx.scale(scaleX, 1);
+                pCtx.drawImage(logoRender, -canvasLogoW / 2, -canvasLogoH / 2, canvasLogoW, canvasLogoH);
+                pCtx.restore();
+            }
+
+            try {
+                const fileUrl = photoCanvas.toDataURL('image/jpeg', 0.95);
+                const nomeFoto = `logocam_foto_${Date.now()}.jpg`;
+                abrirPreview(fileUrl, nomeFoto, 'foto');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // --- DISPARADOR DE GRAVAÇÃO (VÍDEO) ---
         function toggleRecording() {
             if (!isRecording) {
                 startRecording();
@@ -453,7 +664,6 @@
 
         async function startRecording() {
             if (isRecording) return;
-            
             updateCachedRects();
 
             const btnInner = document.getElementById('record-btn-inner');
@@ -462,30 +672,13 @@
             document.getElementById('record-btn').style.background = '#dc2626';
 
             recordedChunks = [];
-            
             const ua = navigator.userAgent;
             const isAndroid = /Android/i.test(ua);
-            const isOldAndroid = /Android\s([5-9]\.)/i.test(ua); 
-
             let videoBitrate = 1200000; 
 
-            if (isAndroid) {
-                if (isOldAndroid) {
-                    recordingCanvas.width = 540;   
-                    recordingCanvas.height = 960;
-                    videoBitrate = 800000; 
-                } else {
-                    recordingCanvas.width = 720;   
-                    recordingCanvas.height = 1280;
-                }
-            } else {
-                recordingCanvas.width = 720;
-                recordingCanvas.height = 1280;
-            }
-
+            recordingCanvas.width = 720;
+            recordingCanvas.height = 1280;
             recordCtx.imageSmoothingEnabled = false;
-            recordCtx.mozImageSmoothingEnabled = false;
-            recordCtx.webkitImageSmoothingEnabled = false;
 
             isRecording = true;
             recordingStream = recordingCanvas.captureStream(); 
@@ -502,15 +695,7 @@
 
             let options = {};
             if (isAndroid) {
-                if (MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
-                    options = { mimeType: 'video/webm;codecs=h264,opus', videoBitsPerSecond: videoBitrate };
-                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
-                    options = { mimeType: 'video/webm;codecs=h264', videoBitsPerSecond: videoBitrate };
-                } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                    options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBitrate };
-                } else {
-                    options = { mimeType: 'video/webm', videoBitsPerSecond: videoBitrate };
-                }
+                options = { mimeType: 'video/webm;codecs=h264', videoBitsPerSecond: videoBitrate };
             } else {
                 if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
                     options = { mimeType: 'video/mp4;codecs=avc1', audioBitsPerSecond: 64000 };
@@ -522,48 +707,31 @@
             try {
                 mediaRecorder = new MediaRecorder(combinedStream, options);
             } catch (err) {
-                console.warn("Falha com codecs dedicados, modo genérico ativo...", err);
                 try {
                     mediaRecorder = new MediaRecorder(combinedStream);
                 } catch(finalErr) {
                     resetRecordButton();
                     isRecording = false;
-                    alert("Erro: O navegador não suporta gravação de vídeo.");
+                    alert("Erro: Navegador incompatível com gravação.");
                     return;
                 }
             }
 
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) {
-                    recordedChunks.push(e.data);
-                }
+                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
             };
 
             mediaRecorder.onstop = () => {
                 if (recordedChunks.length === 0) return;
-
                 const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
                 const fileUrl = URL.createObjectURL(blob);
-
-                const downloadLink = document.createElement('a');
-                downloadLink.href = fileUrl;
-
                 const ext = (mediaRecorder.mimeType && mediaRecorder.mimeType.includes('mp4')) ? 'mp4' : 'webm';
-                downloadLink.download = `logocam_pro_${Date.now()}.${ext}`;
-                document.body.appendChild(downloadLink);
-
-                downloadLink.click();
-
-                setTimeout(() => {
-                    if (downloadLink.parentNode) {
-                        document.body.removeChild(downloadLink);
-                    }
-                    URL.revokeObjectURL(fileUrl);
-                }, 4000);
+                const nomeVideo = `logocam_pro_${Date.now()}.${ext}`;
 
                 if (recordingStream) {
                     recordingStream.getTracks().forEach(track => track.stop());
                 }
+                abrirPreview(fileUrl, nomeVideo, 'video');
             };
 
             mediaRecorder.start();
@@ -572,12 +740,8 @@
         function stopRecording() {
             if (!isRecording) return;
             isRecording = false;
-
             resetRecordButton();
-
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
         }
 
         function resetRecordButton() {
