@@ -181,7 +181,7 @@
             }
         }
 
-        // --- GERENCIAMENTO DE LOGOS E ACESSO (VERIFICAÇÃO VIA REQUISIÇÃO HEAD) ---
+        // --- GERENCIAMENTO DE LOGOS E ACESSO CORRIGIDO PARA IOS ---
         async function verificarLoginSalvo() {
             const senhaSalva = localStorage.getItem('app_senha');
             const dataLogin = localStorage.getItem('app_data_login');
@@ -194,19 +194,19 @@
                     const logoUrl = `logos/${senhaSalva}.png`;
                     
                     try {
-                        // Verifica no servidor usando HEAD para não rebaixar o arquivo sem necessidade
-                        const checagem = await fetch(logoUrl, { method: 'HEAD', cache: 'no-cache' });
+                        // CORREÇÃO IOS: O timestamp (?t=...) no fetch força o WebKit/Safari a consultar a internet em tempo real[cite: 3]
+                        const checagem = await fetch(`${logoUrl}?t=${Date.now()}`, { method: 'HEAD', cache: 'no-store' });
                         
                         if (checagem.ok) { 
-                            // Arquivo validado com sucesso no servidor, libera acesso usando a cópia em cache
+                            // Se existir no servidor, abre o app puxando o arquivo do cache local (Economiza dados)[cite: 3]
                             setupLogoFromUrl(logoUrl);
                             liberarAcesso();
                         } else { 
-                            // Logomarca deletada do servidor (404), bloqueia o usuário imediatamente
+                            // Se foi deletado do servidor (404), desloga e bloqueia o espertinho na hora![cite: 3]
                             limparCredenciais();
                         }
                     } catch (erro) {
-                        // Se o cliente estiver sem conexão alguma, permite a entrada paliativa usando cache local
+                        // Caso falte internet total no celular, permite entrada paliativa offline via cache local
                         setupLogoFromUrl(logoUrl);
                         liberarAcesso();
                     }
@@ -224,8 +224,8 @@
             const logoUrl = `logos/${logoName}.png`;
 
             try {
-                // Checa a existência real do arquivo na hospedagem antes de salvar credenciais
-                const checagem = await fetch(logoUrl, { method: 'HEAD', cache: 'no-cache' });
+                // CORREÇÃO IOS: Força a validação na internet em tempo real ao digitar o código[cite: 3]
+                const checagem = await fetch(`${logoUrl}?t=${Date.now()}`, { method: 'HEAD', cache: 'no-store' });
                 
                 if (checagem.ok) {
                     localStorage.setItem('app_senha', logoName);
@@ -269,7 +269,8 @@
                 recordingStream = null;
             }
 
-            logoRender.src = "";
+            // Garante a limpeza total do elemento da imagem para o iOS descarregar a logo antiga da tela
+            logoRender.removeAttribute('src');
             wrapper.style.display = 'none';
             
             document.getElementById('app-container').style.display='none';
@@ -325,7 +326,7 @@
             setTimeout(updateCachedRects, 1000);
         }
 
-        // --- MOTOR DE ANIMAÇÃO E GRAVAÇÃO UNIFICADO (FIM DOS TRAVAMENTOS) ---
+        // --- MOTOR DE ANIMAÇÃO E GRAVAÇÃO UNIFICADO ---
         const wrapper = document.getElementById('logo-wrapper');
         const containerInner = document.getElementById('logo-container-inner');
         const logoRender = document.getElementById('logo-img');
@@ -351,18 +352,16 @@
             if (elapsed < FPS_INTERVAL) return;
             lastAnimTime = timestamp - (elapsed % FPS_INTERVAL);
 
-            // 1. Atualiza rotação no ecrã do telemóvel
             if (!isPaused) {
                 counter += (speed * (TARGET_FPS / 30)); 
                 let scaleX = Math.abs(Math.sin(counter));
                 containerInner.style.transform = `scaleX(${scaleX})`;
             }
 
-            // 2. SE ESTIVER GRAVANDO: Desenha no Canvas exatamente no mesmo frame (Sem Loops Paralelos)
             if (isRecording) {
                 recordCtx.drawImage(video, 0, 0, recordingCanvas.width, recordingCanvas.height);
 
-                if (wrapper.style.display !== 'none' && logoRender.src) {
+                if (wrapper.style.display !== 'none' && logoRender.getAttribute('src')) {
                     recordCtx.save();
 
                     const videoRect = cachedVideoRect;
@@ -390,7 +389,6 @@
                 }
             }
         }
-        // Inicia o motor unificado
         animateLoop();
         
         function togglePause() { 
@@ -437,7 +435,7 @@
         function showControls() { uiTop.classList.remove('hidden-ui'); uiBottom.classList.remove('hidden-ui'); }
 
 
-        // --- DISPARADOR DE GRAVAÇÃO COM ALOCAÇÃO VIA HARDWARE ---
+        // --- DISPARADOR DE GRAVAÇÃO ---
         function toggleRecording() {
             if (!isRecording) {
                 startRecording();
