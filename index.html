@@ -308,7 +308,7 @@
                 imgModal.src = url;
                 imgModal.style.display = 'block';
                 videoModal.style.display = 'none';
-                iosHint.style.display = 'block'; // Mostra dica de toque longo apenas para fotos
+                iosHint.style.display = 'block'; 
             } else {
                 videoModal.src = url;
                 videoModal.style.display = 'block';
@@ -342,20 +342,15 @@
             urlParaBaixar = "";
             nomeArquivoParaBaixar = "";
 
-            // O GRANDE SEGREDO PARA RE-ATIVAR NO IOS SEM PERDER PERMISSÃO:
-            // Em vez de recriar o fluxo do zero, checamos se o stream anterior ainda está ativo.
-            // Se as tracks estiverem vivas, apenas damos play no elemento de vídeo.
             if (stream && stream.active) {
                 const tracksVivas = stream.getTracks().every(track => track.readyState === 'live');
                 if (tracksVivas) {
                     video.play().catch(() => {
-                        initCamera(); // Se o iOS travou severamente, força reinício completo
+                        initCamera(); 
                     });
                     return;
                 }
             }
-            
-            // Caso tenha morrido de fato por inatividade, reconecta do zero
             initCamera();
         }
 
@@ -537,17 +532,38 @@
                     const videoRect = cachedVideoRect;
                     const logoRect = cachedLogoRect;
 
-                    const scaleXFactor = recordingCanvas.width / videoRect.width;
-                    const scaleYFactor = recordingCanvas.height / videoRect.height;
+                    // Calcula o aspecto real da câmera comparado à tela física (Simula o object-fit: cover)
+                    const streamWidth = video.videoWidth || 720;
+                    const streamHeight = video.videoHeight || 1280;
+                    const streamRatio = streamWidth / streamHeight;
+                    const elementRatio = videoRect.width / videoRect.height;
+
+                    let renderWidth, renderHeight, renderLeft, renderTop;
+                    if (elementRatio < streamRatio) {
+                        renderHeight = videoRect.height;
+                        renderWidth = videoRect.height * streamRatio;
+                        renderLeft = videoRect.left + (videoRect.width - renderWidth) / 2;
+                        renderTop = videoRect.top;
+                    } else {
+                        renderWidth = videoRect.width;
+                        renderHeight = videoRect.width / streamRatio;
+                        renderLeft = videoRect.left;
+                        renderTop = videoRect.top + (videoRect.height - renderHeight) / 2;
+                    }
 
                     const logoCenterX = logoRect.left + logoRect.width / 2;
                     const logoCenterY = logoRect.top + logoRect.height / 2;
 
-                    const canvasLogoX = (logoCenterX - videoRect.left) * scaleXFactor;
-                    const canvasLogoY = (logoCenterY - videoRect.top) * scaleYFactor;
+                    // Faz o mapeamento milimétrico e proporcional sem achatar
+                    const normX = (logoCenterX - renderLeft) / renderWidth;
+                    const normY = (logoCenterY - renderTop) / renderHeight;
+                    const normW = logoRect.width / renderWidth;
+                    const normH = logoRect.height / renderHeight;
 
-                    const canvasLogoW = logoRect.width * scaleXFactor;
-                    const canvasLogoH = logoRect.height * scaleYFactor;
+                    const canvasLogoX = normX * recordingCanvas.width;
+                    const canvasLogoY = normY * recordingCanvas.height;
+                    const canvasLogoW = normW * recordingCanvas.width;
+                    const canvasLogoH = normH * recordingCanvas.height;
 
                     recordCtx.translate(canvasLogoX, canvasLogoY);
                     let scaleX = Math.abs(Math.sin(counter));
@@ -613,8 +629,10 @@
 
             const photoCanvas = document.createElement('canvas');
             const pCtx = photoCanvas.getContext('2d');
-            photoCanvas.width = 1080;
-            photoCanvas.height = 1920;
+            
+            // Força a proporção exata nativa da câmera
+            photoCanvas.width = video.videoWidth || 1080;
+            photoCanvas.height = video.videoHeight || 1920;
 
             pCtx.imageSmoothingEnabled = true;
             pCtx.imageSmoothingQuality = 'high';
@@ -625,17 +643,36 @@
                 const videoRect = cachedVideoRect;
                 const logoRect = cachedLogoRect;
 
-                const scaleXFactor = photoCanvas.width / videoRect.width;
-                const scaleYFactor = photoCanvas.height / videoRect.height;
+                const streamWidth = video.videoWidth || 720;
+                const streamHeight = video.videoHeight || 1280;
+                const streamRatio = streamWidth / streamHeight;
+                const elementRatio = videoRect.width / videoRect.height;
+
+                let renderWidth, renderHeight, renderLeft, renderTop;
+                if (elementRatio < streamRatio) {
+                    renderHeight = videoRect.height;
+                    renderWidth = videoRect.height * streamRatio;
+                    renderLeft = videoRect.left + (videoRect.width - renderWidth) / 2;
+                    renderTop = videoRect.top;
+                } else {
+                    renderWidth = videoRect.width;
+                    renderHeight = videoRect.width / streamRatio;
+                    renderLeft = videoRect.left;
+                    renderTop = videoRect.top + (videoRect.height - renderHeight) / 2;
+                }
 
                 const logoCenterX = logoRect.left + logoRect.width / 2;
                 const logoCenterY = logoRect.top + logoRect.height / 2;
 
-                const canvasLogoX = (logoCenterX - videoRect.left) * scaleXFactor;
-                const canvasLogoY = (logoCenterY - videoRect.top) * scaleYFactor;
+                const normX = (logoCenterX - renderLeft) / renderWidth;
+                const normY = (logoCenterY - renderTop) / renderHeight;
+                const normW = logoRect.width / renderWidth;
+                const normH = logoRect.height / renderHeight;
 
-                const canvasLogoW = logoRect.width * scaleXFactor;
-                const canvasLogoH = logoRect.height * scaleYFactor;
+                const canvasLogoX = normX * photoCanvas.width;
+                const canvasLogoY = normY * photoCanvas.height;
+                const canvasLogoW = normW * photoCanvas.width;
+                const canvasLogoH = normH * photoCanvas.height;
 
                 pCtx.translate(canvasLogoX, canvasLogoY);
                 let scaleX = Math.abs(Math.sin(counter));
@@ -674,14 +711,15 @@
             recordedChunks = [];
             const ua = navigator.userAgent;
             const isAndroid = /Android/i.test(ua);
-            let videoBitrate = 1200000; 
+            let videoBitrate = 2500000; // Bitrate elevado para garantir qualidade premium
 
-            recordingCanvas.width = 720;
-            recordingCanvas.height = 1280;
-            recordCtx.imageSmoothingEnabled = false;
+            // Define o tamanho da gravação com base no tamanho real enviado pelo sensor da câmera
+            recordingCanvas.width = video.videoWidth || 720;
+            recordingCanvas.height = video.videoHeight || 1280;
+            recordCtx.imageSmoothingEnabled = true;
 
             isRecording = true;
-            recordingStream = recordingCanvas.captureStream(); 
+            recordingStream = recordingCanvas.captureStream(TARGET_FPS); 
 
             let combinedStream;
             if (stream && stream.getAudioTracks().length > 0) {
@@ -698,9 +736,9 @@
                 options = { mimeType: 'video/webm;codecs=h264', videoBitsPerSecond: videoBitrate };
             } else {
                 if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
-                    options = { mimeType: 'video/mp4;codecs=avc1', audioBitsPerSecond: 64000 };
+                    options = { mimeType: 'video/mp4;codecs=avc1', videoBitsPerSecond: videoBitrate, audioBitsPerSecond: 64000 };
                 } else {
-                    options = { mimeType: 'video/mp4', audioBitsPerSecond: 64000 };
+                    options = { mimeType: 'video/mp4', videoBitsPerSecond: videoBitrate, audioBitsPerSecond: 64000 };
                 }
             }
 
